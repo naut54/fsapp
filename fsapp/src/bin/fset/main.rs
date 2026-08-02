@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 use fs_config::Config;
 
 #[derive(Parser)]
-#[command(name = "fset", about = "Read/write fsapp's shared JSON config file")]
+#[command(name = "fset", version, about = "Read/write fsapp's shared JSON config file")]
 struct Cli {
     /// Override the config file location for this invocation.
     #[arg(long, global = true)]

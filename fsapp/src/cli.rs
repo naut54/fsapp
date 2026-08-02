@@ -4,7 +4,11 @@ use clap::{Args, Parser, Subcommand};
 use fs_config::{CompressFormat, OnError, SortOrder};
 
 #[derive(Parser)]
-#[command(name = "fsapp", about = "copy / mv / sync / watch / compress, backed by file-engine")]
+#[command(
+    name = "fsapp",
+    version,
+    about = "copy / mv / sync / watch / compress, backed by file-engine"
+)]
 pub struct Cli {
     /// -v info, -vv debug, -vvv trace (default: warn).
     #[arg(short = 'v', action = clap::ArgAction::Count, global = true)]
