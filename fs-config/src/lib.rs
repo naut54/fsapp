@@ -64,3 +64,62 @@ pub fn save_config(config: &Config, path: &Path) -> Result<(), ConfigError> {
 pub fn default_config_path() -> Result<PathBuf, ConfigError> {
     resolve_config_path(None)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_config_rejects_malformed_json() {
+        let err = parse_config("{not json").unwrap_err();
+        assert!(matches!(err, ConfigError::Parse(_)));
+    }
+
+    #[test]
+    fn parse_config_rejects_a_value_that_fails_schema_validation() {
+        let err = parse_config(r#"{"global":{"verbosity":9}}"#).unwrap_err();
+        assert!(matches!(err, ConfigError::Validation(_)));
+    }
+
+    #[test]
+    fn parse_config_accepts_a_valid_partial_config() {
+        let config = parse_config(r#"{"sync":{"checksum":true}}"#).unwrap();
+        assert_eq!(config.sync.unwrap().checksum, Some(true));
+    }
+
+    #[test]
+    fn load_config_on_a_missing_file_returns_defaults_without_creating_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+
+        let config = load_config(&path).unwrap();
+
+        assert_eq!(config, Config::default());
+        assert!(!path.exists(), "fsapp's read-only load path must never touch disk for a missing file");
+    }
+
+    #[test]
+    fn save_then_load_round_trips_exactly() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nested").join("config.json");
+
+        let mut config = Config::default();
+        config.copy = Some(CopySection { overwrite: Some(true), ..Default::default() });
+
+        save_config(&config, &path).unwrap();
+        assert!(path.exists(), "save_config should create missing parent directories");
+
+        let loaded = load_config(&path).unwrap();
+        assert_eq!(loaded, config);
+    }
+
+    #[test]
+    fn load_config_on_an_invalid_file_surfaces_the_parse_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, "{ this is not json").unwrap();
+
+        let err = load_config(&path).unwrap_err();
+        assert!(matches!(err, ConfigError::Parse(_)));
+    }
+}

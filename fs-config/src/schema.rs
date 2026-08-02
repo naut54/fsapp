@@ -7,6 +7,7 @@ use crate::error::ConfigError;
 /// section is optional; `{}` is a fully valid file meaning "all builder
 /// defaults everywhere".
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub global: Option<GlobalSection>,
@@ -166,4 +167,134 @@ fn check_gte_one(value: Option<u64>, key: &str) -> Result<(), ConfigError> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_object_is_a_valid_config_meaning_all_defaults() {
+        let config: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(config, Config::default());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn only_touched_keys_round_trip_through_json() {
+        let json = r#"{"copy":{"on-error":"abort","overwrite":true}}"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.copy.as_ref().unwrap().on_error, Some(OnError::Abort));
+        assert_eq!(config.copy.as_ref().unwrap().overwrite, Some(true));
+        assert_eq!(config.copy.as_ref().unwrap().small_file_threshold, None);
+
+        // Serializing back out must omit untouched keys and sections, not
+        // dump the whole struct (§6.3).
+        let round_tripped = serde_json::to_string(&config).unwrap();
+        assert_eq!(round_tripped, json);
+    }
+
+    #[test]
+    fn unknown_key_in_a_known_section_is_a_validation_error() {
+        let err = serde_json::from_str::<Config>(r#"{"copy":{"on-eror":"abort"}}"#).unwrap_err();
+        assert!(err.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn unknown_section_name_is_a_validation_error() {
+        // §6.4: a typo must surface, never be silently swallowed — this
+        // applies to a mistyped *section* name too, not just a mistyped
+        // key within a known section.
+        let err = serde_json::from_str::<Config>(r#"{"coppy":{"overwrite":true}}"#).unwrap_err();
+        assert!(err.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn verbosity_in_range_is_valid() {
+        let config = Config {
+            global: Some(GlobalSection { verbosity: Some(3), quiet: None }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn verbosity_above_three_is_invalid() {
+        let config = Config {
+            global: Some(GlobalSection { verbosity: Some(4), quiet: None }),
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(matches!(err, ConfigError::Validation(_)));
+        assert!(err.to_string().contains("global.verbosity"));
+    }
+
+    #[test]
+    fn small_file_threshold_of_zero_is_invalid_in_every_section_that_has_it() {
+        let mut config = Config {
+            copy: Some(CopySection { small_file_threshold: Some(0), ..Default::default() }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_err());
+
+        config = Config {
+            mv: Some(MvSection { small_file_threshold: Some(0), ..Default::default() }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_err());
+
+        config = Config {
+            sync: Some(SyncSection { small_file_threshold: Some(0), ..Default::default() }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_err());
+
+        config = Config {
+            compress: Some(CompressSection { small_file_threshold: Some(0), ..Default::default() }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn batch_concurrency_of_zero_is_invalid() {
+        let config = Config {
+            copy: Some(CopySection { batch_concurrency: Some(0), ..Default::default() }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn max_bytes_per_batch_of_zero_is_invalid_copy_only() {
+        let config = Config {
+            copy: Some(CopySection { max_bytes_per_batch: Some(0), ..Default::default() }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn max_files_per_batch_of_zero_is_invalid_copy_only() {
+        let config = Config {
+            copy: Some(CopySection { max_files_per_batch: Some(0), ..Default::default() }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn positive_batch_values_are_valid() {
+        let config = Config {
+            copy: Some(CopySection {
+                small_file_threshold: Some(1024),
+                batch_concurrency: Some(4),
+                max_bytes_per_batch: Some(8 * 1024 * 1024),
+                max_files_per_batch: Some(100),
+                ..Default::default()
+            }),
+            ..Config::default()
+        };
+        assert!(config.validate().is_ok());
+    }
 }

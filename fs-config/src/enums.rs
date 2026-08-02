@@ -56,3 +56,48 @@ pub enum CompressFormat {
 impl_from_str_via_value_enum!(OnError);
 impl_from_str_via_value_enum!(SortOrder);
 impl_from_str_via_value_enum!(CompressFormat);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn on_error_parses_kebab_case_values() {
+        assert_eq!("continue".parse::<OnError>().unwrap(), OnError::Continue);
+        assert_eq!("abort".parse::<OnError>().unwrap(), OnError::Abort);
+        assert_eq!("undo".parse::<OnError>().unwrap(), OnError::Undo);
+    }
+
+    #[test]
+    fn on_error_parsing_is_case_insensitive() {
+        assert_eq!("Continue".parse::<OnError>().unwrap(), OnError::Continue);
+        assert_eq!("ABORT".parse::<OnError>().unwrap(), OnError::Abort);
+    }
+
+    #[test]
+    fn on_error_rejects_unknown_values() {
+        assert!("retry".parse::<OnError>().is_err());
+    }
+
+    #[test]
+    fn sort_order_round_trips_through_json() {
+        let json = serde_json::to_string(&SortOrder::Asc).unwrap();
+        assert_eq!(json, "\"asc\"");
+        assert_eq!(serde_json::from_str::<SortOrder>(&json).unwrap(), SortOrder::Asc);
+    }
+
+    #[test]
+    fn compress_format_parses_kebab_case_values() {
+        assert_eq!("zip".parse::<CompressFormat>().unwrap(), CompressFormat::Zip);
+        assert_eq!("gzip".parse::<CompressFormat>().unwrap(), CompressFormat::Gzip);
+        assert!("tar".parse::<CompressFormat>().is_err());
+    }
+
+    #[test]
+    fn defaults_match_file_engine_builder_defaults() {
+        // §6.3: absent keys mean "builder default" — these are the values
+        // the builders themselves default to, so `Default` must agree.
+        assert_eq!(OnError::default(), OnError::Continue);
+        assert_eq!(SortOrder::default(), SortOrder::Desc);
+    }
+}

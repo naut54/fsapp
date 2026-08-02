@@ -35,3 +35,67 @@ pub fn backup_config(config_path: &Path, kind: &str) -> Result<PathBuf, ConfigEr
 
     Ok(candidate)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backup_copies_content_and_names_it_after_the_original_and_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.json");
+        std::fs::write(&config_path, r#"{"copy":{"overwrite":true}}"#).unwrap();
+
+        let backup_path = backup_config(&config_path, "bak").unwrap();
+
+        assert_eq!(backup_path.parent().unwrap(), dir.path());
+        let name = backup_path.file_name().unwrap().to_string_lossy().to_string();
+        assert!(name.starts_with("config.json.bak-"), "unexpected name: {name}");
+        let timestamp = name.strip_prefix("config.json.bak-").unwrap();
+        assert!(timestamp.parse::<u64>().is_ok(), "timestamp segment should be a plain integer: {timestamp}");
+
+        assert_eq!(std::fs::read_to_string(&backup_path).unwrap(), r#"{"copy":{"overwrite":true}}"#);
+        // The original is untouched by taking a backup.
+        assert!(config_path.exists());
+    }
+
+    #[test]
+    fn invalid_kind_produces_an_invalid_prefixed_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.json");
+        std::fs::write(&config_path, "{not valid json").unwrap();
+
+        let backup_path = backup_config(&config_path, "invalid").unwrap();
+        let name = backup_path.file_name().unwrap().to_string_lossy().to_string();
+        assert!(name.starts_with("config.json.invalid-"), "unexpected name: {name}");
+    }
+
+    #[test]
+    fn repeated_backups_in_the_same_second_never_collide_or_overwrite() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.json");
+        std::fs::write(&config_path, "{}").unwrap();
+
+        let first = backup_config(&config_path, "bak").unwrap();
+        let second = backup_config(&config_path, "bak").unwrap();
+        let third = backup_config(&config_path, "bak").unwrap();
+
+        assert_ne!(first, second);
+        assert_ne!(second, third);
+        assert_ne!(first, third);
+        // All three must still exist — a collision must never overwrite
+        // an earlier backup.
+        assert!(first.exists());
+        assert!(second.exists());
+        assert!(third.exists());
+    }
+
+    #[test]
+    fn missing_source_file_is_an_io_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("does-not-exist.json");
+
+        let err = backup_config(&config_path, "bak").unwrap_err();
+        assert!(matches!(err, ConfigError::Backup { .. }));
+    }
+}
