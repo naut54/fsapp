@@ -24,6 +24,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Copy files from SOURCE to DEST.
     Copy {
         source: PathBuf,
         dest: PathBuf,
@@ -40,6 +41,7 @@ pub enum Command {
         #[arg(long)]
         sort_order: Option<SortOrder>,
     },
+    /// Move files from SOURCE to DEST.
     Mv {
         source: PathBuf,
         dest: PathBuf,
@@ -50,6 +52,7 @@ pub enum Command {
         #[arg(long)]
         overwrite: bool,
     },
+    /// Sync DEST to match SOURCE (copies changes, deletes orphans).
     Sync {
         source: PathBuf,
         dest: PathBuf,
@@ -63,12 +66,14 @@ pub enum Command {
         #[arg(long)]
         checksum: bool,
     },
+    /// Watch PATH for filesystem changes and print events until Ctrl+C.
     Watch {
         path: PathBuf,
         /// Inverts the builder's default of `true`.
         #[arg(long)]
         no_recursive: bool,
     },
+    /// Compress SOURCE into an archive at DEST.
     Compress {
         source: PathBuf,
         dest: PathBuf,
