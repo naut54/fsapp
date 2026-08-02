@@ -4,27 +4,45 @@
 # release.yml's header) rather than a hand-added job inside it, so `dist`'s
 # own CI consistency check never conflicts with this.
 #
-# Triggers on the release *being published*, not on the tag push, so it's
-# guaranteed to run after `dist`'s release.yml has already created the
-# GitHub Release these .debs get uploaded to as additional assets.
+# Triggers on the "Release" workflow *completing*, not on `release:
+# published` — GitHub Actions does not fire repo events (including
+# `release: published`) for a release created using the default
+# GITHUB_TOKEN, which is exactly what dist's `host` job uses. `workflow_run`
+# is exempt from that restriction, so it's the reliable way to run after
+# dist has already created the GitHub Release these .debs upload to.
 name: Build and attach .deb packages
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach .debs to (e.g. v0.1.0)"
+        required: true
 
 permissions:
   contents: write
 
 jobs:
   build-deb:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ steps.tag.outputs.tag }}
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-deb
@@ -34,4 +52,4 @@ jobs:
           cargo deb -p fsapp
           cargo deb -p fset
       - name: Upload .debs to the release
-        run: gh release upload "${{ github.event.release.tag_name }}" target/debian/*.deb --clobber
+        run: gh release upload "${{ steps.tag.outputs.tag }}" target/debian/*.deb --clobber
