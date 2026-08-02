@@ -1,0 +1,15 @@
+[package]
+name = "fs-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared config schema, validation, and file I/O for fsapp/fset"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+dirs = "5"
+thiserror = "1"

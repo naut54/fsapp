@@ -1,0 +1,29 @@
+[workspace]
+members = ["cargo:."]
+
+# Config for 'dist'. Generated via `dist init`/`dist generate` (cargo-dist
+# 0.32.0) — see fsapp-design-spec.md §10.1. Regenerate with `dist generate`
+# after editing.
+[dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.32.0"
+# CI backends to support
+ci = "github"
+# The installers to generate for each app
+installers = ["shell", "homebrew"]
+# Target platforms to build apps for (Rust target-triple syntax) — the
+# three from §10.1 item 1, plus musl for OVH VPS distros that don't match
+# the exact glibc used to build the gnu target.
+targets = ["x86_64-apple-darwin", "aarch64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl"]
+# Path that installers should place binaries in
+install-path = "CARGO_HOME"
+# Where to host releases
+hosting = "github"
+# Whether to install an updater program
+install-updater = false
+# Homebrew tap to auto-commit formula updates to (§10.1 item 4) — create
+# this repo once, empty, before the first release. The generated
+# `publish-homebrew-formula` CI job needs a `HOMEBREW_TAP_TOKEN` repo
+# secret with push access to it.
+tap = "naut54/homebrew-tap"
+publish-jobs = ["homebrew"]
