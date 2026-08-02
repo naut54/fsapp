@@ -1,0 +1,37 @@
+# §10.2 of fsapp-design-spec.md: lightweight .deb packaging, no self-hosted
+# apt repository. Deliberately a separate workflow from release.yml (which
+# is fully owned/self-checked by `dist generate` — see .github/workflows/
+# release.yml's header) rather than a hand-added job inside it, so `dist`'s
+# own CI consistency check never conflicts with this.
+#
+# Triggers on the release *being published*, not on the tag push, so it's
+# guaranteed to run after `dist`'s release.yml has already created the
+# GitHub Release these .debs get uploaded to as additional assets.
+name: Build and attach .deb packages
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
+      - name: Build .deb packages
+        run: |
+          cargo deb -p fsapp
+          cargo deb -p fset
+      - name: Upload .debs to the release
+        run: gh release upload "${{ github.event.release.tag_name }}" target/debian/*.deb --clobber
