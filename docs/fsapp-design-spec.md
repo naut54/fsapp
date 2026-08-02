@@ -7,30 +7,43 @@ should be flagged rather than guessed at.
 
 ## 1. Overview
 
-Two Rust binaries in one Cargo workspace, wrapping the `file-engine` crate
-(Eduardo's own crate, published under `naut54` on crates.io):
+Two Rust binaries, one Cargo package (`fsapp`, two `[[bin]]` targets), in a
+workspace also holding the shared `fs-config` lib crate. Wraps the
+`file-engine` crate (Eduardo's own crate, published under `naut54` on
+crates.io):
 
 - **`fsapp`** — the operational CLI: `copy`, `mv`, `sync`, `watch`, `compress`.
 - **`fset`** — a companion CLI that reads/writes the shared JSON config file
   used to set persistent defaults for `fsapp`'s flags.
 
-Both binaries share a `fs-config` library crate that owns the config schema,
-(de)serialization, validation, and file I/O — this is the single source of
-truth so `fset` can never write a config that `fsapp` doesn't understand.
+**Revised from the original two-package design** (`fsapp` and `fset` were
+initially separate Cargo packages): `dist` generates one release — and one
+Homebrew formula — per Cargo *package*, not per binary. Two packages meant
+`brew install fsapp` and `brew install fset` were two separate commands.
+Merging `fset` into `fsapp` as a second `[[bin]]` (same two executables,
+same CLI behavior) makes `dist` treat them as one release, so
+`brew install fsapp` alone installs both binaries. `fset`'s source now
+lives at `fsapp/src/bin/fset/` — see §2.
+
+Both binaries share the `fs-config` library crate that owns the config
+schema, (de)serialization, validation, and file I/O — this is the single
+source of truth so `fset` can never write a config that `fsapp` doesn't
+understand.
 
 ## 2. Workspace layout
 
 ```
 fs-workspace/
-├── Cargo.toml            (workspace)
-├── fs-config/             lib: Config struct, serde schema, load/save, validation,
-│                          backup/reset logic, path resolution
-├── fsapp/                 bin: copy/mv/sync/watch/compress
-└── fset/                  bin: get/set/unset/list/path/edit/reset
+├── Cargo.toml              (workspace; members = fs-config, fsapp)
+├── fs-config/               lib: Config struct, serde schema, load/save, validation,
+│                            backup/reset logic, path resolution
+└── fsapp/                   pkg with two [[bin]] targets:
+    ├── src/main.rs           bin "fsapp": copy/mv/sync/watch/compress
+    └── src/bin/fset/main.rs  bin "fset": get/set/unset/list/path/edit/reset
 ```
 
 `fs-config` is a plain library crate (no `[[bin]]`), pulled in as a path
-dependency by both `fsapp` and `fset`.
+dependency by the `fsapp` package (both binaries in it).
 
 ## 3. `file-engine` 1.1.1 — verified public API
 
@@ -555,20 +568,25 @@ produces:
 ### 10.2 `.deb` — lightweight, no hosted repository
 
 **FIXED**: lightweight route chosen over a self-hosted signed apt
-repository. Add `cargo-deb` as an extra CI job (or a manual local step
-pre-tag) that runs alongside `dist`'s workflow, producing
-`target/debian/fsapp_<version>_<arch>.deb` and
-`target/debian/fset_<version>_<arch>.deb`, uploaded as additional assets on
-the same GitHub Release `dist` already created. `[package.metadata.deb]`
-sections in `fsapp/Cargo.toml` and `fset/Cargo.toml` supply
-maintainer/description/section — no separate packaging repo.
+repository. A separate GitHub Actions workflow (`.github/workflows/deb.yml`
+— deliberately *not* a job inside `dist`'s own `release.yml`, since that
+file is self-checked by `dist` and any hand-added job there gets rejected
+as "out of date"; triggered via `workflow_run` on `release.yml`'s
+completion rather than `release: published`, since GitHub Actions doesn't
+fire repo events for a release created with the default `GITHUB_TOKEN`)
+runs `cargo deb -p fsapp` and uploads the result as an additional asset on
+the same GitHub Release `dist` already created. Since `fset` is a second
+`[[bin]]` in the `fsapp` package rather than a separate crate (§1), this
+produces a **single** `fsapp_<version>_<arch>.deb` containing both
+binaries — not two separate `.deb` files. `[package.metadata.deb]` in
+`fsapp/Cargo.toml` lists both binaries under `assets`.
 
 Install flow (this satisfies "apt" literally — `apt` can install a local
 `.deb` file directly, resolving system dependencies, unlike bare `dpkg -i`):
 
 ```bash
-wget https://github.com/naut54/fsapp/releases/latest/download/fsapp_0.1.0_amd64.deb
-sudo apt install ./fsapp_0.1.0_amd64.deb
+wget https://github.com/naut54/fsapp/releases/latest/download/fsapp_0.1.1-1_amd64.deb
+sudo apt install ./fsapp_0.1.1-1_amd64.deb
 ```
 
 No GPG signing key, no self-hosted `Packages`/`Release` index, no
@@ -580,16 +598,18 @@ public.
 
 ### 10.3 What this means for the workspace layout
 
-Two new pieces alongside the existing `fs-config`/`fsapp`/`fset` crates —
-neither is a Rust crate itself:
+New pieces alongside the existing `fs-config`/`fsapp` crates (`fsapp` here
+means the one package with two `[[bin]]`s, per §2) — none of these are
+Rust crates themselves:
 
 ```
 fs-workspace/
-├── Cargo.toml                  ← adds [workspace.metadata.dist], [profile.dist]
-├── .github/workflows/release.yml   ← generated by `dist generate --mode ci`
+├── Cargo.toml                      ← adds [profile.dist]
+├── dist-workspace.toml             ← dist's own config (targets, installers, tap)
+├── .github/workflows/release.yml   ← generated by `dist generate`
+├── .github/workflows/deb.yml       ← hand-maintained; NOT touched by `dist generate`
 ├── fs-config/
-├── fsapp/                      ← adds [package.metadata.deb]
-├── fset/                       ← adds [package.metadata.deb]
+├── fsapp/                          ← adds [package.metadata.deb] (both binaries)
 ```
 
 Plus one external, one-time setup step outside this repo: creating the empty

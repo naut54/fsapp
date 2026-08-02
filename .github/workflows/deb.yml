@@ -47,9 +47,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-deb
         run: cargo install cargo-deb --locked
-      - name: Build .deb packages
-        run: |
-          cargo deb -p fsapp
-          cargo deb -p fset
+      - name: Build .deb package
+        # fset is a second [[bin]] in the fsapp package (not a separate
+        # crate — see §1/§2 of fsapp-design-spec.md), so one `cargo deb`
+        # run produces one .deb containing both binaries.
+        run: cargo deb -p fsapp
       - name: Upload .debs to the release
         run: gh release upload "${{ steps.tag.outputs.tag }}" target/debian/*.deb --clobber
