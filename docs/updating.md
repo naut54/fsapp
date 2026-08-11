@@ -78,6 +78,30 @@ optional — without it Homebrew won't see the new formula commit.
 Minimum supported Rust version is 1.88, which only matters if you install
 from source. Every other channel ships prebuilt binaries.
 
+### Turning on tab completion
+
+`.deb` installs wire this up automatically. Every other channel needs one
+command, once:
+
+```bash
+fsapp completions --install
+fset completions --install
+```
+
+It detects your shell from `$SHELL`, writes the script into the first
+writable completion directory it finds (preferring your Homebrew prefix
+when that's where the binary lives), and tells you what to run to activate
+it. `--shell` and `--dir` override the detection. Without `--install` the
+script goes to stdout, so you can place it yourself:
+
+```bash
+fsapp completions zsh > "$(brew --prefix)/share/zsh/site-functions/_fsapp"
+```
+
+Homebrew does not do this for you: dist's generated formula installs the
+binaries and drops everything else into `$(brew --prefix)/share/fsapp/`,
+which no shell reads. Tracked upstream as axodotdev/cargo-dist#2429.
+
 ---
 
 ## 2. Updating `file-engine` underneath it

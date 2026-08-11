@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
+use clap_complete::Shell;
 use fs_config::{CompressFormat, OnError, SortOrder};
 
 #[derive(Parser)]
@@ -93,6 +94,17 @@ pub enum Command {
     },
     /// Check whether a newer fsapp release is available.
     UpdateCheck,
+    /// Print a shell completion script, or install it with --install.
+    Completions {
+        /// Detected from $SHELL when omitted.
+        shell: Option<Shell>,
+        /// Write the script into the shell's completion directory.
+        #[arg(long)]
+        install: bool,
+        /// Install into this directory instead of searching. Implies --install.
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
 }
 
 /// Flattened into copy/mv/sync/compress — the four that go through the

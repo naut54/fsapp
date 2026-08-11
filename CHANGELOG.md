@@ -4,6 +4,50 @@ All notable changes to this project are documented here.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Added
+
+- **Shell completions for zsh, bash, and fish**, on both binaries:
+
+  ```bash
+  fsapp completions --install     # detects $SHELL, finds a writable dir
+  fsapp completions zsh           # or print it and place it yourself
+  ```
+
+  `--install` prefers your Homebrew prefix when the binary lives there,
+  falls back to the system directory and then to a user-owned one, and
+  prints the `fpath` line to add when it lands somewhere zsh does not read
+  by default.
+
+- **`.deb` packages install completions automatically** into Debian's
+  `bash-completion`, `zsh/vendor-completions`, and
+  `fish/vendor_completions.d` directories, for both `fsapp` and `fset`.
+
+- **Archives now carry the completion scripts** (dist `include`), so they
+  are present on every channel without regenerating them.
+
+### Notes
+
+- Scripts are generated from clap's own command tree, never hand-written,
+  so they cannot drift from the CLI — `update-check` and
+  `--no-update-check` are completable without anyone having written them
+  down. The generated files are committed under `completions/`, and a test
+  regenerates and compares them, so a CLI change that forgets to
+  regenerate fails the suite instead of shipping a stale script.
+
+- **Homebrew does not activate completions**, and this release does not
+  change that. dist's formula installs the binaries and dumps everything
+  else into `$(brew --prefix)/share/fsapp/`, which no shell reads
+  (axodotdev/cargo-dist#2429). Homebrew users run
+  `fsapp completions --install` once. Patching the formula after dist
+  writes it was considered and rejected: it races dist's own commit and
+  would silently stop working if their template changed.
+
+- No PowerShell or Elvish. `completions <shell>` will still print them,
+  but all four release targets are macOS or Linux, so nothing would
+  install them.
+
 ## [0.4.0]
 
 ### Added

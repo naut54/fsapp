@@ -1,4 +1,5 @@
 mod cli;
+mod completions;
 mod convert;
 mod fatal;
 mod progress;
@@ -45,6 +46,13 @@ async fn main() -> ExitCode {
     if matches!(cli.command, Command::UpdateCheck) {
         return run_update_check();
     }
+    // Completions never touch the filesystem the user asked about and are
+    // often piped into a file, so they skip the update notice too.
+    if let Command::Completions { shell, install, dir } = cli.command {
+        use clap::CommandFactory;
+        let code = completions::run(&mut cli::Cli::command(), "fsapp", shell, install, dir);
+        return ExitCode::from(code);
+    }
 
     // Spawned before the operation so the request overlaps with the work
     // rather than adding to it. Nothing below awaits it on the critical
@@ -57,7 +65,9 @@ async fn main() -> ExitCode {
     .then(update::start_background_check);
 
     let code = match cli.command {
-        Command::UpdateCheck => unreachable!("handled above, before the automatic check"),
+        Command::UpdateCheck | Command::Completions { .. } => {
+            unreachable!("handled above, before the automatic check")
+        }
         Command::Copy { source, dest, batch, safety, overwrite, max_bytes_per_batch, max_files_per_batch, sort_order } => {
             run_copy(&config, quiet, source, dest, batch, safety, overwrite, max_bytes_per_batch, max_files_per_batch, sort_order).await
         }
@@ -539,6 +549,35 @@ async fn run_watch(_config: &Config, path: PathBuf, no_recursive: bool) -> i32 {
         Err(e) => {
             fatal::print_with_context("fsapp", &format!("could not watch \"{}\"", path.display()), &e);
             4
+        }
+    }
+}
+
+#[cfg(test)]
+mod completion_tests {
+    use clap::CommandFactory;
+
+    /// The guard that makes committing generated scripts safe: a CLI change
+    /// that forgets `completions/` fails here rather than shipping a script
+    /// that silently omits the new flag (docs/completions-design.md §3.1).
+    #[test]
+    fn committed_scripts_match_the_current_cli() {
+        crate::completions::assert_committed_scripts_are_current(
+            &mut crate::cli::Cli::command(),
+            "fsapp",
+        );
+    }
+
+    /// Catches a restructure that leaves the grammar technically valid but
+    /// empty — the scripts would still generate, just describe nothing.
+    #[test]
+    fn generated_scripts_describe_the_actual_subcommands() {
+        for shell in crate::completions::PACKAGED_SHELLS {
+            let script = crate::completions::render(&mut crate::cli::Cli::command(), "fsapp", shell);
+            let text = String::from_utf8_lossy(&script);
+            for expected in ["copy", "sync", "update-check", "completions"] {
+                assert!(text.contains(expected), "{shell} script is missing `{expected}`");
+            }
         }
     }
 }

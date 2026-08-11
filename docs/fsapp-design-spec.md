@@ -226,6 +226,10 @@ destination" fatal error not tied to a specific entry.
 | `--config <path>` | path | override the config file location for this invocation |
 | `--no-update-check` | bool | skip the automatic check for a newer release (§12) |
 
+Shell completions (`fsapp completions`, `fset completions`) are designed
+in [`completions-design.md`](completions-design.md) rather than here —
+most of that design is about packaging channels, not CLI surface.
+
 ### 4.2 Shared arg groups
 
 **`BatchArgs`** — flattened into `copy`, `mv`, `sync`, `compress` (the four

@@ -34,6 +34,8 @@ colored = "2"
 # the musl target and the .deb stay free of a system OpenSSL dependency.
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
 semver = "1"
+clap_complete = "4"
+dirs = "5"
 
 [dev-dependencies]
 tempfile = "3"
@@ -43,7 +45,16 @@ maintainer = "Eduardo Moya"
 copyright = "2026, Eduardo Moya"
 section = "utils"
 priority = "optional"
+# Debian's completion directories, not Homebrew's. The scripts are the
+# committed ones in `completions/` (docs/completions-design.md §3.1), so
+# they exist at package time without cargo-deb having to build anything.
 assets = [
     ["target/release/fsapp", "usr/bin/", "755"],
     ["target/release/fset", "usr/bin/", "755"],
+    ["../completions/fsapp.bash", "usr/share/bash-completion/completions/fsapp", "644"],
+    ["../completions/_fsapp", "usr/share/zsh/vendor-completions/_fsapp", "644"],
+    ["../completions/fsapp.fish", "usr/share/fish/vendor_completions.d/fsapp.fish", "644"],
+    ["../completions/fset.bash", "usr/share/bash-completion/completions/fset", "644"],
+    ["../completions/_fset", "usr/share/zsh/vendor-completions/_fset", "644"],
+    ["../completions/fset.fish", "usr/share/fish/vendor_completions.d/fset.fish", "644"],
 ]

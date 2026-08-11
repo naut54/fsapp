@@ -1,9 +1,16 @@
 mod keys;
 
+/// The same module `fsapp` uses. `#[path]` rather than `use` because the
+/// two are separate `[[bin]]` targets of one package, so neither can reach
+/// the other's modules — see its own docs.
+#[path = "../../completions.rs"]
+mod completions;
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
+use clap_complete::Shell;
 use fs_config::Config;
 
 #[derive(Parser)]
@@ -33,10 +40,28 @@ enum Command {
     Edit,
     /// Reset the whole file (or one section) to {}; always backs up first.
     Reset { section: Option<String> },
+    /// Print a shell completion script, or install it with --install.
+    Completions {
+        /// Detected from $SHELL when omitted.
+        shell: Option<Shell>,
+        /// Write the script into the shell's completion directory.
+        #[arg(long)]
+        install: bool,
+        /// Install into this directory instead of searching. Implies --install.
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
 }
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+
+    // Handled before config resolution: printing a completion script must
+    // not fail because the config directory is unavailable.
+    if let Command::Completions { shell, install, dir } = cli.command {
+        use clap::CommandFactory;
+        return ExitCode::from(completions::run(&mut Cli::command(), "fset", shell, install, dir));
+    }
 
     let config_path = match fs_config::resolve_config_path(cli.config.clone()) {
         Ok(p) => p,
@@ -57,6 +82,7 @@ fn main() -> ExitCode {
         }
         Command::Edit => run_edit(&config_path),
         Command::Reset { section } => run_reset(&config_path, section.as_deref()),
+        Command::Completions { .. } => unreachable!("handled above"),
     };
 
     ExitCode::from(code as u8)
@@ -290,4 +316,25 @@ fn run_edit(config_path: &std::path::Path) -> i32 {
 
     std::fs::remove_file(&tmp_path).ok();
     result
+}
+
+#[cfg(test)]
+mod completion_tests {
+    use clap::CommandFactory;
+
+    #[test]
+    fn committed_scripts_match_the_current_cli() {
+        crate::completions::assert_committed_scripts_are_current(&mut super::Cli::command(), "fset");
+    }
+
+    #[test]
+    fn generated_scripts_describe_the_actual_subcommands() {
+        for shell in crate::completions::PACKAGED_SHELLS {
+            let script = crate::completions::render(&mut super::Cli::command(), "fset", shell);
+            let text = String::from_utf8_lossy(&script);
+            for expected in ["get", "set", "unset", "completions"] {
+                assert!(text.contains(expected), "{shell} script is missing `{expected}`");
+            }
+        }
+    }
 }

@@ -27,3 +27,10 @@ install-updater = false
 # secret with push access to it.
 tap = "naut54/homebrew-tap"
 publish-jobs = ["homebrew"]
+# Ships the committed completion scripts in every archive and installer.
+# dist's Homebrew template dumps anything beyond the binaries and
+# auto-docs into `pkgshare`, so on Homebrew these land inert at
+# `$(brew --prefix)/share/fsapp/completions/` — present, but activated by
+# `fsapp completions --install` rather than by the formula. See
+# axodotdev/cargo-dist#2429 and docs/completions-design.md §4.2.
+include = ["completions"]
