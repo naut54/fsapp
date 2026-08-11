@@ -21,6 +21,19 @@ pub struct Config {
     pub watch: Option<WatchSection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compress: Option<CompressSection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update: Option<UpdateSection>,
+}
+
+/// The automatic update check, off-by-absence in the negative form so it
+/// resolves through the same `resolve_bool` path as `sync.no-overwrite`
+/// and `watch.no-recursive` — "nothing set anywhere" means the check runs,
+/// and `FSAPP_UPDATE_NO_CHECK=true` disables it without a bespoke env var.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub struct UpdateSection {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub no_check: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

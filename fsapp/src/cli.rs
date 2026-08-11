@@ -22,6 +22,10 @@ pub struct Cli {
     #[arg(long = "config", global = true)]
     pub config: Option<PathBuf>,
 
+    /// Skip the automatic check for a newer fsapp release.
+    #[arg(long = "no-update-check", global = true)]
+    pub no_update_check: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -87,6 +91,8 @@ pub enum Command {
         #[arg(long)]
         format: Option<CompressFormat>,
     },
+    /// Check whether a newer fsapp release is available.
+    UpdateCheck,
 }
 
 /// Flattened into copy/mv/sync/compress — the four that go through the

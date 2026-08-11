@@ -4,9 +4,11 @@ mod fatal;
 mod progress;
 mod resolve;
 mod summary;
+mod update;
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::Duration;
 
 use clap::Parser;
 use cli::{BatchArgs, Command, FsSafetyArgs};
@@ -38,7 +40,24 @@ async fn main() -> ExitCode {
     let quiet = resolve::resolve_bool(cli.quiet, "global", "quiet", config.global.as_ref().and_then(|g| g.quiet));
     init_tracing(verbosity);
 
+    // `update-check` is the explicit path and answers for itself — it must
+    // not also fire the automatic one.
+    if matches!(cli.command, Command::UpdateCheck) {
+        return run_update_check();
+    }
+
+    // Spawned before the operation so the request overlaps with the work
+    // rather than adding to it. Nothing below awaits it on the critical
+    // path — see the timeout after the command finishes.
+    let update_task = update::auto_check_enabled(
+        cli.no_update_check,
+        config.update.as_ref().and_then(|u| u.no_check),
+        quiet,
+    )
+    .then(update::start_background_check);
+
     let code = match cli.command {
+        Command::UpdateCheck => unreachable!("handled above, before the automatic check"),
         Command::Copy { source, dest, batch, safety, overwrite, max_bytes_per_batch, max_files_per_batch, sort_order } => {
             run_copy(&config, quiet, source, dest, batch, safety, overwrite, max_bytes_per_batch, max_files_per_batch, sort_order).await
         }
@@ -54,7 +73,44 @@ async fn main() -> ExitCode {
         }
     };
 
+    if let Some(rx) = update_task {
+        report_update(rx);
+    }
+
     ExitCode::from(code as u8)
+}
+
+/// Gives the check whatever time is left after the operation finished, and
+/// no more. A fresh cache answers in microseconds; a copy that finished in
+/// 40ms against a slow network will not, and the right answer there is to
+/// say nothing rather than hold the shell prompt hostage for a version
+/// number. The thread is simply abandoned — a late answer still reaches
+/// the cache if it beats process exit, and the next run picks it up.
+fn report_update(rx: std::sync::mpsc::Receiver<Option<update::Status>>) {
+    if let Ok(Some(update::Status::Newer { latest, current })) = rx.recv_timeout(UPDATE_GRACE) {
+        update::print_notice(&latest, &current);
+    }
+}
+
+/// How long the notice is allowed to delay the shell prompt. Long enough
+/// for a cache hit and a warm connection, short enough to read as instant.
+const UPDATE_GRACE: Duration = Duration::from_millis(300);
+
+/// The explicit check. Exit 5 on a network failure, consistent with §8.1's
+/// "I/O error unrelated to the engine" — the check genuinely failed, and a
+/// script asking "is there an update?" should be able to tell that apart
+/// from "no".
+fn run_update_check() -> ExitCode {
+    match update::check_now() {
+        Ok(status) => {
+            update::print_verdict(&status);
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("fsapp: error: {e}");
+            ExitCode::from(5)
+        }
+    }
 }
 
 fn init_tracing(verbosity: u8) {

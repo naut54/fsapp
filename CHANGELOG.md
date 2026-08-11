@@ -4,6 +4,47 @@ All notable changes to this project are documented here.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Added
+
+- **An update check.** `fsapp update-check` asks GitHub whether a newer
+  release exists and prints a verdict either way. Alongside a normal
+  command, the same check runs automatically and prints a notice only
+  when there is something newer:
+
+  ```
+  ✓ 402 entries copied (1.2 GiB) in 1.1s
+
+  ↑ fsapp 0.4.0 is available (you have 0.3.0)
+    brew update && brew upgrade naut54/tap/fsapp
+  ```
+
+  The suggested command is chosen from where the running binary lives, so
+  Homebrew users are told to use Homebrew and `.deb` users are not.
+
+- **`--no-update-check`, `FSAPP_UPDATE_NO_CHECK`, and `update.no-check`**
+  to turn the automatic check off, following the same precedence as every
+  other setting. It also stays quiet under `--quiet`, when stderr is not a
+  terminal, and when `CI` is set.
+
+### Notes
+
+- The automatic check never delays the operation. It runs on a detached
+  thread — not a tokio blocking task, which the runtime waits for during
+  shutdown — and gets a 300ms grace period at exit and no more. Measured:
+  0.01s with the check disabled, 0.01s on a cache hit, 0.31s against an
+  unreachable network.
+
+- The result is cached for 24 hours in `<config-dir>/fsapp/update-check.json`
+  (1 hour after a failure). Every failure path is silent: an unreachable
+  network, an unwritable cache directory, and a corrupt cache file all
+  mean "say nothing", never "interrupt the user".
+
+- Adds `ureq` (rustls) and `semver`, taking the dependency tree from 200
+  to 245 crates. TLS stays in-process, so the musl target and the `.deb`
+  gain no system OpenSSL dependency.
+
 ## [0.3.0]
 
 Upgrades to `file-engine` 2.0.0 and spends the new progress API on the

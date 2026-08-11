@@ -125,24 +125,33 @@ pub enum ErrorStrategy { ContinueAndCollect (default), AbortOnError, Undo }
 pub enum SortOrder { Ascending, Descending }
 pub enum DiffStrategy { SizeAndModifiedTime (default), Checksum } // Checksum requires feature "checksum"
 pub enum CompressFormat { Zip, Gzip }
-pub enum StopReason { Fatal, AbortOnError, Cancelled, Undo }
+#[non_exhaustive] pub enum StopReason { Fatal, AbortOnError, Cancelled, Undo }
 
+#[non_exhaustive]
 pub struct OperationOutcome {
     pub succeeded: Vec<Entry>,
     pub failed: Vec<(Entry, Error)>,
     pub cleanup_failed: Vec<(Entry, Error)>,   // move only — copy succeeded, source delete failed
     pub stopped_early: Option<StopReason>,
     pub directories_failed: Vec<(PathBuf, Error)>, // preserve_permissions best-effort failures
+    pub duration: Duration,                    // added in 2.0.0; per phase for sync
 }
 
+#[non_exhaustive]
 pub struct SyncOutcome {
     pub copy: OperationOutcome,
     pub delete: OperationOutcome,
 }
 
+#[non_exhaustive]
 pub enum Progress {
+    // Added in 2.0.0. Emitted once per phase, before the directory pre-pass.
+    Planned { directories: usize, small_files: usize, small_bytes: u64,
+              large_files: usize, large_bytes: u64, small_file_threshold: u64 },
     Started { bytes_total: Option<u64>, entries_total: usize }, // can fire more than once (sync: copy phase, then delete phase)
     EntryStarted { entry: Entry },
+    // Added in 2.0.0. Large (streamed) entries only, sampled every 250ms.
+    EntryProgress { entry: Entry, bytes_copied: u64 },
     EntryCompleted { entry: Entry },
     EntryFailed { entry: Entry },     // NOTE: does not carry the Error — only available later via outcome.failed
     DirectoriesStarted { total: usize },
@@ -208,13 +217,14 @@ destination" fatal error not tied to a specific entry.
 
 ## 4. `fsapp` — CLI surface
 
-### 4.1 Global flags (apply to all 5 subcommands)
+### 4.1 Global flags (apply to all subcommands)
 
 | Flag | Type | Meaning |
 |---|---|---|
 | `-v`, `-vv`, `-vvv` | count | log verbosity: default = warn, `-v` = info, `-vv` = debug, `-vvv` = trace |
 | `-q`, `--quiet` | bool | suppress the progress bar; logging still follows `-v` |
 | `--config <path>` | path | override the config file location for this invocation |
+| `--no-update-check` | bool | skip the automatic check for a newer release (§12) |
 
 ### 4.2 Shared arg groups
 
@@ -344,9 +354,17 @@ the file doesn't exist — it just proceeds with `{}` (all builder defaults).
   "watch": { "no-recursive": false },
   "compress": {
     "on-error": "continue", "small-file-threshold": null, "batch-concurrency": null, "format": null
-  }
+  },
+  "update": { "no-check": false }
 }
 ```
+
+`update.no-check` is stated in the negative deliberately, alongside
+`sync.no-overwrite` and `watch.no-recursive`: the check is on by default,
+and the negative form is what lets "absent everywhere" mean "on" while
+still resolving through the same `resolve_bool` path as every other
+boolean. It also gives the env override its name for free —
+`FSAPP_UPDATE_NO_CHECK=true` — with no bespoke variable. See §12.
 
 Every section is optional; every key within a section is optional; `{}` is a
 fully valid file meaning "all builder defaults everywhere". `fset set` only
@@ -482,7 +500,7 @@ line comes from 2.0.0:
 | `2` | CLI usage error — reserved by `clap`'s own default behavior | fsapp / fset |
 | `3` | Invalid config, not repaired (non-interactive abort, or user chose "exit" at the prompt) | fsapp / fset |
 | `4` | Fatal engine error propagated as `Err` (unsolicited `Cancelled`, `NoSpace`, `FilesystemIntegrityRisk` without `--allow-fs-integrity-risk`, or a pre-flight `Io`/`SourceNotFound`/`DestExists`/`PermissionDenied` before the pipeline starts) | fsapp |
-| `5` | I/O error unrelated to the engine — can't read/write `config.json` beyond parsing, backup creation failed, permissions on the config directory | fsapp / fset |
+| `5` | I/O error unrelated to the engine — can't read/write `config.json` beyond parsing, backup creation failed, permissions on the config directory, or `update-check` could not reach GitHub | fsapp / fset |
 | `130` | User cancelled — `SIGINT`/Ctrl+C, standard `128 + SIGINT(2)` convention | fsapp |
 
 On Ctrl+C: call `.cancel()` on the `Handle`/`WatchHandle` (cooperative — lets
@@ -684,3 +702,100 @@ pushes formula updates to.
 (`fset edit` validation order, GitHub owner/repo, tap repo name, edition/MSRV,
 license, and crates.io publishing were all open as of the previous revision
 of this document — resolved and moved to §9.)
+
+## 12. Update check
+
+`fsapp` tells users when a newer release exists. Two modes, sharing one
+cache and one comparison path (`fsapp/src/update.rs`).
+
+### 12.1 The two modes
+
+**`fsapp update-check`** — explicit. Always hits the network, always
+prints a verdict (including "you are on the latest"), prints to **stdout**
+because there the version *is* the output, and exits `5` if GitHub can't
+be reached. A script asking "is there an update?" must be able to
+distinguish that from "no".
+
+**The automatic check** — runs alongside a normal command. Cached, silent
+unless there is something newer, prints to **stderr** after the summary so
+it never contaminates piped stdout, and never affects the operation.
+
+### 12.2 Source of truth
+
+`https://api.github.com/repos/naut54/fsapp/releases/latest`, whose
+`tag_name` is compared against `CARGO_PKG_VERSION` using the `semver`
+crate. Semantic comparison, not string comparison — as strings `"0.9.0"`
+sorts after `"0.10.0"`. The endpoint excludes prereleases and drafts, so
+an `-rc.1` tag never surfaces as an upgrade prompt.
+
+The request carries a `User-Agent` (GitHub rejects API requests without
+one) and is bounded by a 3s timeout.
+
+### 12.3 Caching
+
+`<config-dir>/fsapp/update-check.json`, holding `last-checked` and
+`latest-version`. Overridable with `FSAPP_CACHE_DIR`.
+
+Deliberately **not** derived from `resolve_config_path`: `--config` is a
+per-invocation override of *which settings to read*, and dropping a cache
+file next to it isn't what the user asked for. The cache is machine state,
+not configuration.
+
+- A successful answer is good for **24h**.
+- A failed attempt suppresses retries for **1h** only. A failure usually
+  means the machine was briefly offline, and a full day of silence would
+  hide a release from anyone who ran the tool at the wrong moment.
+- `last-checked` is stamped **before** the request, not after. The check
+  thread dies with the process (§12.4), so without a pre-stamp an
+  interrupted refresh would leave the cache stale and every subsequent
+  short-lived invocation would open its own connection to GitHub — none
+  living long enough to finish. The stamp caps that at one attempt per
+  failure-TTL; a successful fetch overwrites it moments later.
+- A `last-checked` in the future (clock moved backwards) counts as stale.
+- A corrupt or unreadable cache file is ignored, not fatal.
+
+### 12.4 The automatic check must never cost the user anything
+
+This is the constraint the design is built around, and it has teeth:
+
+- It runs on a **detached `std::thread`, not `tokio::task::spawn_blocking`**.
+  The tokio runtime waits for blocking tasks during shutdown, so a
+  `spawn_blocking` check against an unreachable host added the full 3s
+  network timeout to the command *after* the copy had already finished —
+  measured at 3.01s wall clock for a copy that took 0.0s. A plain thread
+  is outside the runtime's control and dies with the process, which is
+  exactly right: the answer is never worth waiting for.
+- At exit the result gets a **300ms grace period** and no more. Measured:
+  0.01s with the check disabled, 0.01s on a cache hit, 0.31s with an
+  unreachable network — the grace, and nothing beyond it.
+- Every failure path ends in "say nothing": unreachable network,
+  unwritable cache directory, malformed cache, unparsable tag.
+
+### 12.5 When the automatic check is suppressed
+
+Per §6.2 precedence: `--no-update-check` > `FSAPP_UPDATE_NO_CHECK` >
+`update.no-check` > default (it runs). Suppressed additionally when there
+is nobody to read it:
+
+| Condition | Why |
+|---|---|
+| `--quiet` | the user asked for silence |
+| stderr is not a tty | the notice would land in a log or a pipe |
+| `CI` is set | a build server has no use for an upgrade suggestion and shouldn't be making the request |
+| `update-check` subcommand | it answers for itself; running both would double the request |
+
+### 12.6 The notice names one command, not four
+
+The upgrade hint is chosen from where the running binary actually lives —
+`current_exe()`, canonicalized, since Homebrew's `bin/` entries are
+symlinks into `Cellar`:
+
+| Path contains | Hint |
+|---|---|
+| `/Cellar/` or `/homebrew/` | `brew update && brew upgrade naut54/tap/fsapp` |
+| `/.cargo/` | re-run the installer script |
+| starts `/usr/bin/` | download the `.deb` and `dpkg -i` |
+| anything else | the releases page |
+
+Listing every channel would mean three of the four lines are wrong for any
+given reader. See `updating.md` for the full matrix.

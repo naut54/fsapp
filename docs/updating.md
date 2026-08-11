@@ -18,7 +18,31 @@ Check what you have first:
 ```bash
 fsapp --version
 fset --version
+fsapp update-check     # asks GitHub whether anything newer exists
 ```
+
+`fsapp` also tells you on its own. After a normal command it prints a
+notice when a newer release exists, naming the one upgrade command that
+matches how this copy was installed:
+
+```
+✓ 402 entries copied (1.2 GiB) in 1.1s
+
+↑ fsapp 0.4.0 is available (you have 0.3.0)
+  brew update && brew upgrade naut54/tap/fsapp
+```
+
+That check is cached for a day and runs in the background, so it never
+delays anything. To turn it off:
+
+```bash
+fsapp copy src dst --no-update-check   # once
+export FSAPP_UPDATE_NO_CHECK=true      # for a shell
+fset set update.no-check true          # permanently
+```
+
+It also stays quiet on its own when there's nobody to read it — under
+`--quiet`, when stderr isn't a terminal, and when `CI` is set.
 
 Both binaries ship together and always carry the same version — `fset` is
 a second `[[bin]]` in the `fsapp` package, not a separate crate. If they

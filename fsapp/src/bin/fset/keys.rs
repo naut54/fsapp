@@ -52,6 +52,8 @@ pub fn get(config: &Config, section: &str, key: &str) -> Result<Option<String>, 
         ("compress", "batch-concurrency") => opt!(config.compress, batch_concurrency),
         ("compress", "format") => opt!(config.compress, format),
 
+        ("update", "no-check") => opt!(config.update, no_check),
+
         _ => return Err(unknown_key(section, key)),
     };
     Ok(value)
@@ -108,6 +110,8 @@ pub fn set(config: &mut Config, section: &str, key: &str, value: &str) -> Result
         ("compress", "batch-concurrency") => set_field!(config.compress, batch_concurrency, parse_u64),
         ("compress", "format") => set_field!(config.compress, format, parse_enum::<CompressFormat>),
 
+        ("update", "no-check") => set_field!(config.update, no_check, parse_bool),
+
         _ => return Err(unknown_key(section, key)),
     }
     Ok(())
@@ -156,6 +160,8 @@ pub fn unset(config: &mut Config, section: &str, key: &str) -> Result<(), String
         ("compress", "small-file-threshold") => clear_field!(config.compress, small_file_threshold),
         ("compress", "batch-concurrency") => clear_field!(config.compress, batch_concurrency),
         ("compress", "format") => clear_field!(config.compress, format),
+
+        ("update", "no-check") => clear_field!(config.update, no_check),
 
         _ => return Err(unknown_key(section, key)),
     }

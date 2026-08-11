@@ -29,6 +29,14 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 indicatif = "0.17"
 colored = "2"
+# Update check only. `default-features = false` drops gzip — one small JSON
+# response per day doesn't need it — and `rustls` keeps TLS in-process so
+# the musl target and the .deb stay free of a system OpenSSL dependency.
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+semver = "1"
+
+[dev-dependencies]
+tempfile = "3"
 
 [package.metadata.deb]
 maintainer = "Eduardo Moya"

@@ -21,9 +21,50 @@ pub fn resolve_config_path(explicit: Option<PathBuf>) -> Result<PathBuf, ConfigE
         .ok_or(ConfigError::NoConfigDir)
 }
 
+/// Where the update check caches its last result. Deliberately **not**
+/// derived from `resolve_config_path`: `--config /tmp/one-off.json` is a
+/// per-invocation override of which settings to read, and dropping a cache
+/// file next to it (or worse, into whatever directory the user pointed at)
+/// isn't what they asked for. The cache is machine state, not
+/// configuration, so it tracks the platform config dir only.
+///
+/// `FSAPP_CACHE_DIR` overrides the directory, for tests and for anyone who
+/// wants the cache somewhere writable when the config dir isn't.
+pub fn update_cache_path() -> Result<PathBuf, ConfigError> {
+    if let Ok(dir) = std::env::var("FSAPP_CACHE_DIR") {
+        return Ok(PathBuf::from(dir).join("update-check.json"));
+    }
+    dirs::config_dir()
+        .map(|dir| dir.join("fsapp").join("update-check.json"))
+        .ok_or(ConfigError::NoConfigDir)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_cache_lives_beside_the_config_not_at_the_explicit_override() {
+        // SAFETY: test-only env mutation, restored before returning.
+        unsafe { std::env::set_var("FSAPP_CONFIG", "/tmp/somewhere-else/config.json") };
+        let cache = update_cache_path();
+        unsafe { std::env::remove_var("FSAPP_CONFIG") };
+        if let Ok(path) = cache {
+            assert!(!path.starts_with("/tmp/somewhere-else"));
+            assert!(path.ends_with("fsapp/update-check.json") || path.ends_with("fsapp\\update-check.json"));
+        }
+    }
+
+    #[test]
+    fn cache_dir_env_var_overrides_the_platform_directory() {
+        unsafe { std::env::set_var("FSAPP_CACHE_DIR", "/tmp/fsapp-cache-test") };
+        let cache = update_cache_path();
+        unsafe { std::env::remove_var("FSAPP_CACHE_DIR") };
+        assert_eq!(
+            cache.unwrap(),
+            PathBuf::from("/tmp/fsapp-cache-test/update-check.json")
+        );
+    }
 
     #[test]
     fn explicit_path_wins_over_everything() {
