@@ -45,19 +45,26 @@ fs-workspace/
 `fs-config` is a plain library crate (no `[[bin]]`), pulled in as a path
 dependency by the `fsapp` package (both binaries in it).
 
-## 3. `file-engine` 1.1.1 — verified public API
+## 3. `file-engine` 2.0.0 — verified public API
 
 **This was verified by actually compiling against the crate**, not just
 reading its docs — the crate's public API had a real bug in 1.1.0 (several
 `pub` types were unreachable from outside the crate because their containing
 modules weren't `pub`), which Eduardo fixed and republished as 1.1.1. All of
-the surface below was confirmed to compile against 1.1.1.
+the surface below was confirmed to compile against 2.0.0.
 
 Add to `fsapp`'s `Cargo.toml`:
 
 ```toml
-file-engine = { version = "1.1.1", features = ["sync", "watch", "compress", "checksum", "permissions"] }
+file-engine = { version = "2.0.0", features = ["sync", "watch", "compress", "checksum", "permissions"] }
 ```
+
+**2.0.0 upgrade note.** Every public output type — `Progress`,
+`StopReason`, `OperationOutcome`, `SyncOutcome` — is now
+`#[non_exhaustive]`, so both exhaustive `match`es in `fsapp` need a `_`
+arm, and later additions to any of them stop being breaking changes.
+Builders, `Handle<T>`, `Error`, and the feature flags are unchanged from
+1.x. See §7 for what the release added to the progress renderer.
 
 (`operations` and `analyze` are enabled by default already.)
 
@@ -95,12 +102,13 @@ targets (it's `#[cfg(all(unix, feature = "permissions"))]` on the crate side).
 Any call site in `fsapp` must be behind `#[cfg(unix)]`, with a runtime warning
 on other platforms if the user asked for it.
 
-### 3.3 Public types (all confirmed reachable at crate root in 1.1.1)
+### 3.3 Public types (all confirmed reachable at crate root in 2.0.0)
 
 ```rust
 pub use file_engine::{
     Error, Result,                          // error.rs
     Handle, Progress,                        // operations feature
+    EtaEstimator,                            // added in 2.0.0
     WatchEvent, WatchEventKind, WatchHandle, // watch feature
     CopyBuilder, MoveBuilder,
     SyncBuilder, SyncOutcome,
@@ -189,6 +197,14 @@ destination" fatal error not tied to a specific entry.
 7. **`DiffStrategy::Checksum` only exists when the `checksum` feature is
    enabled** on `file-engine` (it's a `#[cfg(feature = "checksum")]` enum
    variant, not a runtime check).
+8. **Every output type is `#[non_exhaustive]` as of 2.0.0** — `Progress`,
+   `StopReason`, `OperationOutcome`, `SyncOutcome`. Matches need a `_` arm;
+   the two outcome structs can only be built via `Default::default()`
+   followed by field assignment, which matters for test fixtures.
+9. **Dispatch order changed in 2.0.0**: the smallest large file now runs
+   before the small-file batches instead of after all of them. So the
+   renderer sees a streamed entry early rather than at ~95% elapsed. Don't
+   assume `Progress` events arrive grouped small-then-large.
 
 ## 4. `fsapp` — CLI surface
 
@@ -420,6 +436,41 @@ config.json.bak-1735776000         # valid file, backed up before a manual `fset
   events — the renderer must treat "no events, but `Handle` resolved `Ok`"
   as a normal, successful, silent case, not a bug.
 
+### 7.1 What the bar shows (file-engine 2.0.0)
+
+The bar's *position* is entry counts, as before. Everything else on the
+line comes from 2.0.0:
+
+- **Length is set at `Progress::Planned`**, which arrives before the
+  directory pre-pass — earlier than `Started`. On a large tree that
+  pre-pass can run for a minute on its own, and previously the bar showed
+  `0/0` for all of it. `Started` still re-sets the length and resets the
+  position, which is what gives `sync` a fresh bar for its delete phase.
+- **`Progress::EntryProgress`** (destination sampled every 250ms, large
+  entries only) drives the message: one streaming file shows `name NN%`,
+  several show `N large files <copied>/<total>`. Without it a lone
+  multi-gigabyte file moved nothing on screen for the entire copy, since
+  the entry count doesn't advance until it completes.
+- **`EtaEstimator`** is fed *every* event — including the ones that don't
+  touch the bar, since each one bounds a span of wall time — and renders
+  into the bar's prefix as `ETA 1m23s · 512.0 MiB/s`. `estimate()`
+  returning `None` prints nothing rather than a fabricated number.
+  Expect the estimate to start pessimistic on a mixed workload and tighten
+  once the first large file lands: until then the estimator stands in the
+  overall byte rate, which carries small-file per-file overhead, for the
+  streaming rate it hasn't measured yet.
+- **A steady tick** (100ms) keeps the spinner alive between events.
+- The template uses `{wide_bar}`, not a fixed width — the message and ETA
+  are long enough that a fixed 40-column bar wrapped the line.
+- **`OperationOutcome.duration`** ends the §8.3 summary line (`... in
+  1.1s`). For `sync` the two phases are timed separately and don't sum to
+  the whole run; a delete phase skipped because the copy phase stopped
+  early reports zero.
+- A copy the filesystem satisfies by cloning (APFS reflink) completes
+  before the first 250ms sample and emits **no** `EntryProgress` at all.
+  That's correct, not a missing-events bug — verified: 1.2 GiB same-volume
+  in 0.4s, no samples; the same tree across volumes samples normally.
+
 ## 8. Output & exit codes
 
 ### 8.1 Exit code table
@@ -525,6 +576,10 @@ succeeded as a process, even if some entries within it failed.
 Goal: `fsapp` and `fset` end up on `PATH` via three channels — a one-line
 shell install, Homebrew, and a downloadable `.deb` — without hand-rolling
 release infrastructure.
+
+The design rationale is below; for the actual procedures — updating an
+installed copy, upgrading the `file-engine` dependency, and cutting a
+release — see [`updating.md`](updating.md).
 
 ### 10.1 Tooling: `dist` (formerly `cargo-dist`)
 

@@ -454,9 +454,9 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "file-engine"
-version = "1.1.1"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f8b8463af3ccd763609c2bcb4c96293a22527b3cfecc4c156177a1679d96b0c"
+checksum = "15049ef2ebf9c6ff2081f0cc0af0be363c2ed1dbdf2d248727bf6cdcab251704"
 dependencies = [
  "blake3",
  "flate2",
@@ -507,7 +507,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "fs-config"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "clap",
  "dirs",
@@ -519,7 +519,7 @@ dependencies = [
 
 [[package]]
 name = "fsapp"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "clap",
  "colored",

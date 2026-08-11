@@ -3,6 +3,8 @@
 use colored::Colorize;
 use file_engine::{OperationOutcome, StopReason, SyncOutcome};
 
+use crate::progress::human_duration;
+
 /// Prints one summary block for `outcome`. `verb` is what appears after
 /// the entry count ("copied", "moved", "archived", ...). Returns whether
 /// this block represents full success (no failures, not stopped early) —
@@ -10,10 +12,11 @@ use file_engine::{OperationOutcome, StopReason, SyncOutcome};
 pub fn print_operation_block(verb: &str, outcome: &OperationOutcome, show_cleanup: bool) -> bool {
     let bytes: u64 = outcome.succeeded.iter().map(|e| e.size).sum();
     println!(
-        "{} {} entries {verb} ({})",
+        "{} {} entries {verb} ({}) in {}",
         "\u{2713}".green(),
         outcome.succeeded.len(),
-        human_bytes(bytes)
+        human_bytes(bytes),
+        human_duration(outcome.duration)
     );
 
     if !outcome.failed.is_empty() {
@@ -72,6 +75,8 @@ fn stop_reason_message(reason: StopReason, failed_count: usize) -> String {
         StopReason::Undo => format!("rolled back after the {ordinal} failure (--on-error undo)"),
         StopReason::Cancelled => "cancelled".to_string(),
         StopReason::Fatal => "a fatal error stopped the operation".to_string(),
+        // `StopReason` is `#[non_exhaustive]` as of file-engine 2.0.0.
+        _ => "stopped early".to_string(),
     }
 }
 
@@ -86,7 +91,7 @@ fn ordinal(n: usize) -> String {
     format!("{n}{suffix}")
 }
 
-fn human_bytes(bytes: u64) -> String {
+pub fn human_bytes(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
     if bytes < 1024 {
         return format!("{bytes} B");

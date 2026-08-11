@@ -1,0 +1,99 @@
+# Changelog
+
+All notable changes to this project are documented here.
+
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.3.0]
+
+Upgrades to `file-engine` 2.0.0 and spends the new progress API on the
+one thing the bar was worst at: a large file copying with nothing on
+screen moving.
+
+### Added
+
+- **ETA and transfer rate on the progress bar**, e.g.
+  `ETA 1m23s · 512.0 MiB/s`, from `file-engine`'s new `EtaEstimator`. It
+  models directory, small-file, and large-file cost separately, so a
+  mixed workload isn't estimated from a single meaningless
+  bytes-per-second figure. Nothing is shown while the estimate has no
+  measured rate to stand on, rather than a number that collapses a
+  second later.
+
+- **Live progress within a large file.** The engine now samples an
+  in-flight large entry every 250ms, and the bar's message shows
+  `large_a.bin 88%` for one streaming file, or
+  `2 large files 424.0 MiB/1.2 GiB` for several. Previously a lone
+  multi-gigabyte copy showed no movement at all between starting and
+  finishing — the entry counter doesn't advance until the file lands.
+
+- **Operation duration in the summary** — `✓ 402 entries copied
+  (1.2 GiB) in 1.1s`, from the new `OperationOutcome.duration`. `sync`
+  reports it per phase; the two phases don't sum to the whole run, since
+  the diff that precedes them belongs to neither.
+
+- **A steady spinner tick** (100ms). The spinner previously only advanced
+  when a progress event arrived, so it froze for exactly as long as a
+  large copy took.
+
+### Changed
+
+- **The bar is set up earlier.** Its length now comes from the new
+  `Progress::Planned`, which arrives before the directory pre-pass rather
+  than after it. On a large tree that pre-pass runs for a while on its
+  own, and the bar used to read `0/0` for all of it.
+
+- **The bar sizes itself to the terminal** (`{wide_bar}` rather than a
+  fixed 40 columns). With a filename in the message and an ETA after the
+  counter, a fixed-width bar pushed the line past the terminal width and
+  wrapped it. Long filenames are truncated to 28 characters.
+
+- **Durations under 10 seconds show one decimal** (`0.4s`, not `0s`). A
+  same-volume copy that the filesystem satisfies by cloning finishes in
+  milliseconds, and `in 0s` read as "unmeasured" rather than "instant".
+
+- **`file-engine` 1.1.1 → 2.0.0.** Its output types are now
+  `#[non_exhaustive]`; both exhaustive `match`es here gained a `_` arm.
+  Its dispatch order also changed — the smallest large file now runs
+  before the small-file batches instead of after all of them — so
+  progress events no longer arrive grouped small-then-large. See
+  `docs/fsapp-design-spec.md` §3 and §7.1.
+
+### Notes
+
+- A copy the filesystem satisfies by cloning (APFS reflink, same volume)
+  completes before the first 250ms sample and emits no in-flight progress
+  at all. That is correct rather than a missing-events bug: there was
+  nothing to wait for.
+
+- On a workload of many small files plus a few large ones, the ETA starts
+  pessimistic and tightens sharply once the first large file completes.
+  Until then the estimator stands in the overall byte rate, which carries
+  small-file per-file overhead, for the streaming rate it has not yet
+  measured.
+
+## [0.2.1]
+
+### Added
+
+- `--version` on both `fsapp` and `fset`.
+
+## [0.2.0]
+
+### Changed
+
+- `fset` is now a second `[[bin]]` in the `fsapp` package rather than a
+  separate crate, so `brew install fsapp` installs both binaries in one
+  command.
+
+## [0.1.1]
+
+### Fixed
+
+- `fsapp --help` showed the wrong subcommand descriptions.
+
+## [0.1.0]
+
+Initial release: the `fsapp` operational CLI and the `fset` config CLI,
+covering copy/mv/sync/watch/compress, with shell, Homebrew, and `.deb`
+install channels.
