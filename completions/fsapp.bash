@@ -16,6 +16,9 @@ _fsapp() {
             ",$1")
                 cmd="fsapp"
                 ;;
+            fsapp,analyze)
+                cmd="fsapp__subcmd__analyze"
+                ;;
             fsapp,completions)
                 cmd="fsapp__subcmd__completions"
                 ;;
@@ -39,6 +42,9 @@ _fsapp() {
                 ;;
             fsapp,watch)
                 cmd="fsapp__subcmd__watch"
+                ;;
+            fsapp__subcmd__help,analyze)
+                cmd="fsapp__subcmd__help__subcmd__analyze"
                 ;;
             fsapp__subcmd__help,completions)
                 cmd="fsapp__subcmd__help__subcmd__completions"
@@ -71,12 +77,54 @@ _fsapp() {
 
     case "${cmd}" in
         fsapp)
-            opts="-v -q -h -V --quiet --config --no-update-check --help --version copy mv sync watch compress update-check completions help"
+            opts="-v -q -h -V --quiet --config --no-update-check --help --version copy mv sync watch compress analyze update-check completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        fsapp__subcmd__analyze)
+            opts="-v -q -h --extensions --exclude --min-size --max-size --max-depth --follow-symlinks --top-n-largest --detect-mime-types --detect-duplicates --abort-on-error --quiet --config --no-update-check --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --extensions)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --exclude)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --min-size)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --max-size)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --max-depth)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --top-n-largest)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 --config)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
@@ -187,8 +235,22 @@ _fsapp() {
             return 0
             ;;
         fsapp__subcmd__help)
-            opts="copy mv sync watch compress update-check completions help"
+            opts="copy mv sync watch compress analyze update-check completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        fsapp__subcmd__help__subcmd__analyze)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi

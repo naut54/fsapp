@@ -92,6 +92,37 @@ pub enum Command {
         #[arg(long)]
         format: Option<CompressFormat>,
     },
+    /// Inspect a tree read-only: counts, sizes, largest files, extension
+    /// and age breakdowns, and optionally MIME types and duplicates.
+    Analyze {
+        path: PathBuf,
+        /// Only files with one of these extensions (no leading dot).
+        #[arg(long, value_delimiter = ',')]
+        extensions: Option<Vec<String>>,
+        /// Glob patterns, matched relative to PATH, that prune traversal.
+        #[arg(long, value_delimiter = ',')]
+        exclude: Option<Vec<String>>,
+        #[arg(long)]
+        min_size: Option<u64>,
+        #[arg(long)]
+        max_size: Option<u64>,
+        #[arg(long)]
+        max_depth: Option<usize>,
+        #[arg(long)]
+        follow_symlinks: bool,
+        /// How many of the largest matched files to list. 0 disables it.
+        #[arg(long)]
+        top_n_largest: Option<usize>,
+        /// Sniff each matched file's header to classify its MIME type.
+        #[arg(long)]
+        detect_mime_types: bool,
+        /// Content-hash size-colliding files to find exact duplicates.
+        #[arg(long)]
+        detect_duplicates: bool,
+        /// Stop at the first error instead of skipping and collecting it.
+        #[arg(long)]
+        abort_on_error: bool,
+    },
     /// Check whether a newer fsapp release is available.
     UpdateCheck,
     /// Print a shell completion script, or install it with --install.

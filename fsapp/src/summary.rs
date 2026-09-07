@@ -1,7 +1,7 @@
 //! §8.3 operation summary, printed to stdout on exit 0 or 1.
 
 use colored::Colorize;
-use file_engine::{OperationOutcome, StopReason, SyncOutcome};
+use file_engine::{AnalysisReport, OperationOutcome, StopReason, SyncOutcome};
 
 use crate::progress::human_duration;
 
@@ -89,6 +89,85 @@ fn ordinal(n: usize) -> String {
         _ => "th",
     };
     format!("{n}{suffix}")
+}
+
+pub fn print_analysis_report(report: &AnalysisReport) {
+    println!(
+        "{} {} files, {} dirs, {} in {}",
+        "\u{2713}".green(),
+        report.file_count,
+        report.dir_count,
+        human_bytes(report.total_size),
+        human_duration(report.duration)
+    );
+
+    if !report.largest_files.is_empty() {
+        println!("\nLargest files:");
+        for entry in &report.largest_files {
+            println!("  {:>10}  {}", human_bytes(entry.size), entry.relative_path.display());
+        }
+    }
+
+    if !report.by_extension.is_empty() {
+        println!("\nBy extension:");
+        let mut exts: Vec<_> = report.by_extension.iter().collect();
+        exts.sort_by(|a, b| b.1.total_size.cmp(&a.1.total_size));
+        for (ext, stats) in exts {
+            let label = if ext.is_empty() { "(none)" } else { ext.as_str() };
+            println!("  {:<12} {:>6} files  {:>10}", label, stats.count, human_bytes(stats.total_size));
+        }
+    }
+
+    if !report.by_mime.is_empty() {
+        println!("\nBy MIME type:");
+        let mut mimes: Vec<_> = report.by_mime.iter().collect();
+        mimes.sort_by(|a, b| b.1.total_size.cmp(&a.1.total_size));
+        for (mime, stats) in mimes {
+            println!("  {:<24} {:>6} files  {:>10}", mime, stats.count, human_bytes(stats.total_size));
+        }
+    }
+
+    let a = &report.age_buckets;
+    println!("\nAge:");
+    println!("  <1 day    {}", a.under_1_day);
+    println!("  <1 week   {}", a.under_1_week);
+    println!("  <1 month  {}", a.under_1_month);
+    println!("  <1 year   {}", a.under_1_year);
+    println!("  older     {}", a.older);
+    if a.unknown > 0 {
+        println!("  unknown   {}", a.unknown);
+    }
+
+    if report.duplicate_groups_total > 0 {
+        println!(
+            "\n{} {} duplicate groups, {} wasted",
+            "\u{26A0}".yellow(),
+            report.duplicate_groups_total,
+            human_bytes(report.duplicate_bytes_wasted)
+        );
+        for group in &report.duplicates {
+            println!("  {} copies, {} each:", group.paths.len(), human_bytes(group.size));
+            for path in &group.paths {
+                println!("    - {}", path.display());
+            }
+        }
+        if report.duplicate_groups_total > report.duplicates.len() {
+            println!(
+                "  ... {} more group(s) not shown",
+                report.duplicate_groups_total - report.duplicates.len()
+            );
+        }
+    }
+
+    if report.errors_total > 0 {
+        println!("\n{} {} errors:", "\u{2717}".red(), report.errors_total);
+        for (path, err) in &report.errors {
+            println!("  - {}: {err}", path.display());
+        }
+        if report.errors_total > report.errors.len() {
+            println!("  ... {} more not shown", report.errors_total - report.errors.len());
+        }
+    }
 }
 
 pub fn human_bytes(bytes: u64) -> String {

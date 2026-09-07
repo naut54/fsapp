@@ -11,7 +11,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use file_engine::{
-    EtaEstimator, Handle, Progress, Result as EngineResult, WatchEvent, WatchEventKind, WatchHandle,
+    AnalysisHandle, AnalysisProgress, AnalysisReport, EtaEstimator, Handle, Progress, Result as EngineResult,
+    WatchEvent, WatchEventKind, WatchHandle,
 };
 use tokio_stream::StreamExt;
 
@@ -293,6 +294,66 @@ pub async fn drive_watch(mut handle: WatchHandle) -> WatchDriveResult {
     }
     let result = handle.await;
     WatchDriveResult { result, cancelled }
+}
+
+pub struct AnalyzeDriveResult {
+    pub outcome: EngineResult<AnalysisReport>,
+    pub cancelled: bool,
+}
+
+/// No `Planned`-style event exists for `analyze` — the walk doesn't know
+/// the tree size ahead of time — so this is a spinner-only bar (no
+/// length) rather than `drive`'s `{wide_bar}`, ticking on a count of
+/// matched entries instead of bytes.
+pub async fn drive_analyze(mut handle: AnalysisHandle, quiet: bool) -> AnalyzeDriveResult {
+    let bar = if !quiet && std::io::stderr().is_terminal() {
+        let pb = indicatif::ProgressBar::new_spinner();
+        pb.set_style(indicatif::ProgressStyle::with_template("{spinner:.cyan} {msg}").unwrap());
+        pb.enable_steady_tick(Duration::from_millis(100));
+        Some(pb)
+    } else {
+        None
+    };
+
+    let mut entries = 0u64;
+    let mut hashed = 0u64;
+    let mut cancelled = false;
+    loop {
+        tokio::select! {
+            biased;
+            _ = tokio::signal::ctrl_c(), if !cancelled => {
+                handle.cancel();
+                cancelled = true;
+                if let Some(b) = &bar {
+                    b.set_message("cancelling...");
+                }
+            }
+            next = handle.progress().next() => {
+                match next {
+                    Some(AnalysisProgress::EntryAnalyzed { .. }) => {
+                        entries += 1;
+                        if let (Some(b), false) = (&bar, cancelled) {
+                            b.set_message(format!("{entries} entries analyzed"));
+                        }
+                    }
+                    Some(AnalysisProgress::EntryHashed { .. }) => {
+                        hashed += 1;
+                        if let (Some(b), false) = (&bar, cancelled) {
+                            b.set_message(format!("{hashed} files hashed for duplicates"));
+                        }
+                    }
+                    Some(_) => {}
+                    None => break,
+                }
+            }
+        }
+    }
+    if let Some(b) = &bar {
+        b.finish_and_clear();
+    }
+
+    let outcome = handle.await;
+    AnalyzeDriveResult { outcome, cancelled }
 }
 
 fn print_watch_event(event: &WatchEvent) {

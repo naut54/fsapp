@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0]
+
+### Added
+
+- **`fsapp analyze PATH`** — read-only tree inspection, from `file-engine`
+  2.1.0's new `analyze` feature. Reports file/dir counts, total size, the
+  largest files, a breakdown by extension, and an age histogram
+  (`<1 day`/`<1 week`/`<1 month`/`<1 year`/older). `--extensions`,
+  `--exclude`, `--min-size`, `--max-size`, `--max-depth`, and
+  `--follow-symlinks` filter the walk; `--detect-mime-types` sniffs each
+  matched file's header, and `--detect-duplicates` content-hashes
+  size-colliding files (blake3) to report exact duplicate groups and
+  bytes wasted. `--abort-on-error` switches from collecting per-entry
+  errors to stopping at the first one.
+
+### Changed
+
+- **`file-engine` 2.0.0 → 2.1.0.** Purely additive — no changes to the
+  existing copy/mv/sync/watch/compress paths.
+
 ## [0.5.0]
 
 ### Added

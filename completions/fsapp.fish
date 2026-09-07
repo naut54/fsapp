@@ -35,6 +35,7 @@ complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "mv" -d 'Move files from
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "sync" -d 'Sync DEST to match SOURCE (copies changes, deletes orphans)'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "watch" -d 'Watch PATH for filesystem changes and print events until Ctrl+C'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "compress" -d 'Compress SOURCE into an archive at DEST'
+complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "analyze" -d 'Inspect a tree read-only: counts, sizes, largest files, extension and age breakdowns, and optionally MIME types and duplicates'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "update-check" -d 'Check whether a newer fsapp release is available'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "completions" -d 'Print a shell completion script, or install it with --install'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
@@ -100,6 +101,21 @@ complete -c fsapp -n "__fish_fsapp_using_subcommand compress" -s v -d '-v info, 
 complete -c fsapp -n "__fish_fsapp_using_subcommand compress" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
 complete -c fsapp -n "__fish_fsapp_using_subcommand compress" -l no-update-check -d 'Skip the automatic check for a newer fsapp release'
 complete -c fsapp -n "__fish_fsapp_using_subcommand compress" -s h -l help -d 'Print help'
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l extensions -d 'Only files with one of these extensions (no leading dot)' -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l exclude -d 'Glob patterns, matched relative to PATH, that prune traversal' -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l min-size -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l max-size -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l max-depth -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l top-n-largest -d 'How many of the largest matched files to list. 0 disables it' -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l config -d 'Override the config file location for this invocation' -r -F
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l follow-symlinks
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l detect-mime-types -d 'Sniff each matched file\'s header to classify its MIME type'
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l detect-duplicates -d 'Content-hash size-colliding files to find exact duplicates'
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l abort-on-error -d 'Stop at the first error instead of skipping and collecting it'
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -s v -d '-v info, -vv debug, -vvv trace (default: warn)'
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l no-update-check -d 'Skip the automatic check for a newer fsapp release'
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -s h -l help -d 'Print help'
 complete -c fsapp -n "__fish_fsapp_using_subcommand update-check" -l config -d 'Override the config file location for this invocation' -r -F
 complete -c fsapp -n "__fish_fsapp_using_subcommand update-check" -s v -d '-v info, -vv debug, -vvv trace (default: warn)'
 complete -c fsapp -n "__fish_fsapp_using_subcommand update-check" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
@@ -112,11 +128,12 @@ complete -c fsapp -n "__fish_fsapp_using_subcommand completions" -s v -d '-v inf
 complete -c fsapp -n "__fish_fsapp_using_subcommand completions" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
 complete -c fsapp -n "__fish_fsapp_using_subcommand completions" -l no-update-check -d 'Skip the automatic check for a newer fsapp release'
 complete -c fsapp -n "__fish_fsapp_using_subcommand completions" -s h -l help -d 'Print help'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress update-check completions help" -f -a "copy" -d 'Copy files from SOURCE to DEST'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress update-check completions help" -f -a "mv" -d 'Move files from SOURCE to DEST'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress update-check completions help" -f -a "sync" -d 'Sync DEST to match SOURCE (copies changes, deletes orphans)'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress update-check completions help" -f -a "watch" -d 'Watch PATH for filesystem changes and print events until Ctrl+C'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress update-check completions help" -f -a "compress" -d 'Compress SOURCE into an archive at DEST'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress update-check completions help" -f -a "update-check" -d 'Check whether a newer fsapp release is available'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress update-check completions help" -f -a "completions" -d 'Print a shell completion script, or install it with --install'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress update-check completions help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "copy" -d 'Copy files from SOURCE to DEST'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "mv" -d 'Move files from SOURCE to DEST'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "sync" -d 'Sync DEST to match SOURCE (copies changes, deletes orphans)'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "watch" -d 'Watch PATH for filesystem changes and print events until Ctrl+C'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "compress" -d 'Compress SOURCE into an archive at DEST'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "analyze" -d 'Inspect a tree read-only: counts, sizes, largest files, extension and age breakdowns, and optionally MIME types and duplicates'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "update-check" -d 'Check whether a newer fsapp release is available'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "completions" -d 'Print a shell completion script, or install it with --install'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'

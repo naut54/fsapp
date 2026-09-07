@@ -124,6 +124,28 @@ _arguments "${_arguments_options[@]}" : \
 ':dest:_files' \
 && ret=0
 ;;
+(analyze)
+_arguments "${_arguments_options[@]}" : \
+'*--extensions=[Only files with one of these extensions (no leading dot)]:EXTENSIONS:_default' \
+'*--exclude=[Glob patterns, matched relative to PATH, that prune traversal]:EXCLUDE:_default' \
+'--min-size=[]:MIN_SIZE:_default' \
+'--max-size=[]:MAX_SIZE:_default' \
+'--max-depth=[]:MAX_DEPTH:_default' \
+'--top-n-largest=[How many of the largest matched files to list. 0 disables it]:TOP_N_LARGEST:_default' \
+'--config=[Override the config file location for this invocation]:CONFIG:_files' \
+'--follow-symlinks[]' \
+'--detect-mime-types[Sniff each matched file'\''s header to classify its MIME type]' \
+'--detect-duplicates[Content-hash size-colliding files to find exact duplicates]' \
+'--abort-on-error[Stop at the first error instead of skipping and collecting it]' \
+'*-v[-v info, -vv debug, -vvv trace (default\: warn)]' \
+'-q[Suppress the progress bar; logging still follows -v]' \
+'--quiet[Suppress the progress bar; logging still follows -v]' \
+'--no-update-check[Skip the automatic check for a newer fsapp release]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':path:_files' \
+&& ret=0
+;;
 (update-check)
 _arguments "${_arguments_options[@]}" : \
 '--config=[Override the config file location for this invocation]:CONFIG:_files' \
@@ -181,6 +203,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(analyze)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (update-check)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -210,11 +236,17 @@ _fsapp_commands() {
 'sync:Sync DEST to match SOURCE (copies changes, deletes orphans)' \
 'watch:Watch PATH for filesystem changes and print events until Ctrl+C' \
 'compress:Compress SOURCE into an archive at DEST' \
+'analyze:Inspect a tree read-only\: counts, sizes, largest files, extension and age breakdowns, and optionally MIME types and duplicates' \
 'update-check:Check whether a newer fsapp release is available' \
 'completions:Print a shell completion script, or install it with --install' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'fsapp commands' commands "$@"
+}
+(( $+functions[_fsapp__subcmd__analyze_commands] )) ||
+_fsapp__subcmd__analyze_commands() {
+    local commands; commands=()
+    _describe -t commands 'fsapp analyze commands' commands "$@"
 }
 (( $+functions[_fsapp__subcmd__completions_commands] )) ||
 _fsapp__subcmd__completions_commands() {
@@ -239,11 +271,17 @@ _fsapp__subcmd__help_commands() {
 'sync:Sync DEST to match SOURCE (copies changes, deletes orphans)' \
 'watch:Watch PATH for filesystem changes and print events until Ctrl+C' \
 'compress:Compress SOURCE into an archive at DEST' \
+'analyze:Inspect a tree read-only\: counts, sizes, largest files, extension and age breakdowns, and optionally MIME types and duplicates' \
 'update-check:Check whether a newer fsapp release is available' \
 'completions:Print a shell completion script, or install it with --install' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'fsapp help commands' commands "$@"
+}
+(( $+functions[_fsapp__subcmd__help__subcmd__analyze_commands] )) ||
+_fsapp__subcmd__help__subcmd__analyze_commands() {
+    local commands; commands=()
+    _describe -t commands 'fsapp help analyze commands' commands "$@"
 }
 (( $+functions[_fsapp__subcmd__help__subcmd__completions_commands] )) ||
 _fsapp__subcmd__help__subcmd__completions_commands() {

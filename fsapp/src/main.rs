@@ -81,6 +81,35 @@ async fn main() -> ExitCode {
         Command::Compress { source, dest, batch, format } => {
             run_compress(&config, quiet, source, dest, batch, format).await
         }
+        Command::Analyze {
+            path,
+            extensions,
+            exclude,
+            min_size,
+            max_size,
+            max_depth,
+            follow_symlinks,
+            top_n_largest,
+            detect_mime_types,
+            detect_duplicates,
+            abort_on_error,
+        } => {
+            run_analyze(
+                quiet,
+                path,
+                extensions,
+                exclude,
+                min_size,
+                max_size,
+                max_depth,
+                follow_symlinks,
+                top_n_largest,
+                detect_mime_types,
+                detect_duplicates,
+                abort_on_error,
+            )
+            .await
+        }
     };
 
     if let Some(rx) = update_task {
@@ -548,6 +577,80 @@ async fn run_watch(_config: &Config, path: PathBuf, no_recursive: bool) -> i32 {
         Ok(()) => 0,
         Err(e) => {
             fatal::print_with_context("fsapp", &format!("could not watch \"{}\"", path.display()), &e);
+            4
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_analyze(
+    quiet: bool,
+    path: PathBuf,
+    extensions: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+    min_size: Option<u64>,
+    max_size: Option<u64>,
+    max_depth: Option<usize>,
+    follow_symlinks: bool,
+    top_n_largest: Option<usize>,
+    detect_mime_types: bool,
+    detect_duplicates: bool,
+    abort_on_error: bool,
+) -> i32 {
+    let mut builder = FileEngine::new().analyze(&path).follow_symlinks(follow_symlinks);
+    if let Some(exts) = extensions {
+        builder = builder.extensions(exts);
+    }
+    if let Some(patterns) = exclude {
+        builder = builder.exclude_globs(patterns);
+    }
+    if let Some(v) = min_size {
+        builder = builder.min_size(v);
+    }
+    if let Some(v) = max_size {
+        builder = builder.max_size(v);
+    }
+    if let Some(v) = max_depth {
+        builder = builder.max_depth(v);
+    }
+    if let Some(v) = top_n_largest {
+        builder = builder.top_n_largest(v);
+    }
+    if detect_mime_types {
+        builder = builder.detect_mime_types(true);
+    }
+    if detect_duplicates {
+        builder = builder.detect_duplicates(true);
+    }
+    if abort_on_error {
+        builder = builder.on_error(file_engine::AnalysisErrorStrategy::AbortOnError);
+    }
+
+    let context = format!("could not analyze \"{}\"", path.display());
+    let handle = match builder.start() {
+        Ok(h) => h,
+        Err(e) => {
+            fatal::print_with_context("fsapp", &context, &e);
+            return 4;
+        }
+    };
+
+    let progress::AnalyzeDriveResult { outcome, cancelled } = progress::drive_analyze(handle, quiet).await;
+    if cancelled {
+        return 130;
+    }
+    match outcome {
+        Ok(report) => {
+            let ok = report.errors_total == 0;
+            summary::print_analysis_report(&report);
+            if ok {
+                0
+            } else {
+                1
+            }
+        }
+        Err(e) => {
+            fatal::print_with_context("fsapp", &context, &e);
             4
         }
     }
