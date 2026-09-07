@@ -107,6 +107,7 @@ complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l min-size -r
 complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l max-size -r
 complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l max-depth -r
 complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l top-n-largest -d 'How many of the largest matched files to list. 0 disables it' -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l walk-concurrency -d 'Worker threads for concurrent directory reads/stats. Defaults to available parallelism' -r
 complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l config -d 'Override the config file location for this invocation' -r -F
 complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l follow-symlinks
 complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l detect-mime-types -d 'Sniff each matched file\'s header to classify its MIME type'

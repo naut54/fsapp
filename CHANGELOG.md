@@ -6,13 +6,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **`--walk-concurrency` on `fsapp analyze`** — sets how many worker
+  threads read directories and `stat` entries concurrently, from
+  `file-engine` 2.2.0's `AnalyzeBuilder::walk_concurrency`. Defaults to
+  available parallelism, matching `--detect-duplicates`' existing
+  `hash_concurrency` default.
+
 ### Changed
 
 - **`file-engine` 2.1.0 → 2.2.0.** `analyze`'s tree walk is now
   multithreaded (`jwalk` in place of `walkdir` for that feature only),
   so a large `fsapp analyze` finishes faster, especially on network
-  filesystems where per-`stat()` latency dominates. Purely additive
-  otherwise — no flag or output changes here.
+  filesystems where per-`stat()` latency dominates.
 
 ## [0.6.0]
 

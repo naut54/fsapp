@@ -132,6 +132,7 @@ _arguments "${_arguments_options[@]}" : \
 '--max-size=[]:MAX_SIZE:_default' \
 '--max-depth=[]:MAX_DEPTH:_default' \
 '--top-n-largest=[How many of the largest matched files to list. 0 disables it]:TOP_N_LARGEST:_default' \
+'--walk-concurrency=[Worker threads for concurrent directory reads/stats. Defaults to available parallelism]:WALK_CONCURRENCY:_default' \
 '--config=[Override the config file location for this invocation]:CONFIG:_files' \
 '--follow-symlinks[]' \
 '--detect-mime-types[Sniff each matched file'\''s header to classify its MIME type]' \

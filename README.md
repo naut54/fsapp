@@ -116,7 +116,11 @@ Age:
 `--max-depth`, and `--follow-symlinks` filter the walk; `--detect-duplicates`
 content-hashes size-colliding files (blake3) and reports duplicate groups
 plus bytes wasted; `--abort-on-error` stops at the first error instead of
-collecting and continuing.
+collecting and continuing. `--walk-concurrency` sets how many worker
+threads read directories and `stat` entries concurrently (defaults to
+available parallelism) — useful to turn down on a network filesystem
+where too many parallel `stat()` calls fight each other, or up on a very
+wide local tree.
 
 ## Configuration
 

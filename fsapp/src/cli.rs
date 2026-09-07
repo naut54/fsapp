@@ -113,6 +113,10 @@ pub enum Command {
         /// How many of the largest matched files to list. 0 disables it.
         #[arg(long)]
         top_n_largest: Option<usize>,
+        /// Worker threads for concurrent directory reads/stats. Defaults
+        /// to available parallelism.
+        #[arg(long)]
+        walk_concurrency: Option<usize>,
         /// Sniff each matched file's header to classify its MIME type.
         #[arg(long)]
         detect_mime_types: bool,

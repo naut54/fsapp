@@ -95,7 +95,7 @@ _fsapp() {
             return 0
             ;;
         fsapp__subcmd__analyze)
-            opts="-v -q -h --extensions --exclude --min-size --max-size --max-depth --follow-symlinks --top-n-largest --detect-mime-types --detect-duplicates --abort-on-error --quiet --config --no-update-check --help"
+            opts="-v -q -h --extensions --exclude --min-size --max-size --max-depth --follow-symlinks --top-n-largest --walk-concurrency --detect-mime-types --detect-duplicates --abort-on-error --quiet --config --no-update-check --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -122,6 +122,10 @@ _fsapp() {
                     return 0
                     ;;
                 --top-n-largest)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --walk-concurrency)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

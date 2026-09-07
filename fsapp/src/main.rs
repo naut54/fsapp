@@ -90,6 +90,7 @@ async fn main() -> ExitCode {
             max_depth,
             follow_symlinks,
             top_n_largest,
+            walk_concurrency,
             detect_mime_types,
             detect_duplicates,
             abort_on_error,
@@ -104,6 +105,7 @@ async fn main() -> ExitCode {
                 max_depth,
                 follow_symlinks,
                 top_n_largest,
+                walk_concurrency,
                 detect_mime_types,
                 detect_duplicates,
                 abort_on_error,
@@ -593,6 +595,7 @@ async fn run_analyze(
     max_depth: Option<usize>,
     follow_symlinks: bool,
     top_n_largest: Option<usize>,
+    walk_concurrency: Option<usize>,
     detect_mime_types: bool,
     detect_duplicates: bool,
     abort_on_error: bool,
@@ -615,6 +618,9 @@ async fn run_analyze(
     }
     if let Some(v) = top_n_largest {
         builder = builder.top_n_largest(v);
+    }
+    if let Some(v) = walk_concurrency {
+        builder = builder.walk_concurrency(v);
     }
     if detect_mime_types {
         builder = builder.detect_mime_types(true);
