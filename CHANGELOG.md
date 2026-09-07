@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **`file-engine` 2.1.0 → 2.2.0.** `analyze`'s tree walk is now
+  multithreaded (`jwalk` in place of `walkdir` for that feature only),
+  so a large `fsapp analyze` finishes faster, especially on network
+  filesystems where per-`stat()` latency dominates. Purely additive
+  otherwise — no flag or output changes here.
+
 ## [0.6.0]
 
 ### Added
