@@ -41,10 +41,23 @@ pub fn update_cache_path() -> Result<PathBuf, ConfigError> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
     use super::*;
+
+    /// `cargo test` runs tests in this module concurrently on threads
+    /// sharing one process, but `FSAPP_CONFIG`/`FSAPP_CACHE_DIR` are
+    /// process-global state — without this, two tests interleaving their
+    /// set/read/remove races and either sees the other's value. Every test
+    /// below that touches either var takes this lock for its full
+    /// set-read-remove sequence; `.unwrap_or_else(|e| e.into_inner())`
+    /// recovers from a poisoned lock left by an earlier test panicking
+    /// mid-mutation, since the env var itself still gets cleaned up.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn update_cache_lives_beside_the_config_not_at_the_explicit_override() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: test-only env mutation, restored before returning.
         unsafe { std::env::set_var("FSAPP_CONFIG", "/tmp/somewhere-else/config.json") };
         let cache = update_cache_path();
@@ -57,6 +70,7 @@ mod tests {
 
     #[test]
     fn cache_dir_env_var_overrides_the_platform_directory() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe { std::env::set_var("FSAPP_CACHE_DIR", "/tmp/fsapp-cache-test") };
         let cache = update_cache_path();
         unsafe { std::env::remove_var("FSAPP_CACHE_DIR") };
@@ -75,6 +89,7 @@ mod tests {
 
     #[test]
     fn explicit_path_wins_even_when_env_var_is_also_set() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: test-only env mutation, restored before returning; no
         // other test in this crate reads/writes FSAPP_CONFIG.
         unsafe { std::env::set_var("FSAPP_CONFIG", "/tmp/from-env.json") };
@@ -85,6 +100,7 @@ mod tests {
 
     #[test]
     fn env_var_wins_over_platform_default() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe { std::env::set_var("FSAPP_CONFIG", "/tmp/from-env-only.json") };
         let resolved = resolve_config_path(None);
         unsafe { std::env::remove_var("FSAPP_CONFIG") };
@@ -93,6 +109,7 @@ mod tests {
 
     #[test]
     fn falls_back_to_platform_config_dir_ending_in_fsapp_config_json() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         unsafe { std::env::remove_var("FSAPP_CONFIG") };
         let resolved = resolve_config_path(None);
         // `dirs::config_dir()` is platform-provided; only assert the part
