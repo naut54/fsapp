@@ -34,6 +34,12 @@ _fsapp() {
             fsapp,mv)
                 cmd="fsapp__subcmd__mv"
                 ;;
+            fsapp,mv-many)
+                cmd="fsapp__subcmd__mv__subcmd__many"
+                ;;
+            fsapp,remove)
+                cmd="fsapp__subcmd__remove"
+                ;;
             fsapp,sync)
                 cmd="fsapp__subcmd__sync"
                 ;;
@@ -61,6 +67,12 @@ _fsapp() {
             fsapp__subcmd__help,mv)
                 cmd="fsapp__subcmd__help__subcmd__mv"
                 ;;
+            fsapp__subcmd__help,mv-many)
+                cmd="fsapp__subcmd__help__subcmd__mv__subcmd__many"
+                ;;
+            fsapp__subcmd__help,remove)
+                cmd="fsapp__subcmd__help__subcmd__remove"
+                ;;
             fsapp__subcmd__help,sync)
                 cmd="fsapp__subcmd__help__subcmd__sync"
                 ;;
@@ -77,7 +89,7 @@ _fsapp() {
 
     case "${cmd}" in
         fsapp)
-            opts="-v -q -h -V --quiet --config --no-update-check --help --version copy mv sync watch compress analyze update-check completions help"
+            opts="-v -q -h -V --quiet --config --no-update-check --help --version copy mv mv-many sync watch compress analyze remove update-check completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -197,7 +209,7 @@ _fsapp() {
             return 0
             ;;
         fsapp__subcmd__copy)
-            opts="-v -q -h --small-file-threshold --batch-concurrency --on-error --preserve-permissions --allow-fs-integrity-risk --overwrite --max-bytes-per-batch --max-files-per-batch --sort-order --quiet --config --no-update-check --help"
+            opts="-v -q -h --small-file-threshold --batch-concurrency --on-error --preserve-permissions --allow-fs-integrity-risk --overwrite --skip-if-identical --max-bytes-per-batch --max-files-per-batch --sort-order --quiet --config --no-update-check --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -239,7 +251,7 @@ _fsapp() {
             return 0
             ;;
         fsapp__subcmd__help)
-            opts="copy mv sync watch compress analyze update-check completions help"
+            opts="copy mv mv-many sync watch compress analyze remove update-check completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -336,6 +348,34 @@ _fsapp() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        fsapp__subcmd__help__subcmd__mv__subcmd__many)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        fsapp__subcmd__help__subcmd__remove)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         fsapp__subcmd__help__subcmd__sync)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
@@ -379,7 +419,7 @@ _fsapp() {
             return 0
             ;;
         fsapp__subcmd__mv)
-            opts="-v -q -h --small-file-threshold --batch-concurrency --on-error --preserve-permissions --allow-fs-integrity-risk --overwrite --quiet --config --no-update-check --help"
+            opts="-v -q -h --small-file-threshold --batch-concurrency --on-error --preserve-permissions --allow-fs-integrity-risk --overwrite --skip-if-identical --quiet --config --no-update-check --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -395,6 +435,90 @@ _fsapp() {
                     ;;
                 --on-error)
                     COMPREPLY=($(compgen -W "continue abort undo" -- "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        fsapp__subcmd__mv__subcmd__many)
+            opts="-v -q -h --small-file-threshold --batch-concurrency --on-error --preserve-permissions --allow-fs-integrity-risk --overwrite --skip-if-identical --quiet --config --no-update-check --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --small-file-threshold)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --batch-concurrency)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --on-error)
+                    COMPREPLY=($(compgen -W "continue abort undo" -- "${cur}"))
+                    return 0
+                    ;;
+                --config)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        fsapp__subcmd__remove)
+            opts="-v -q -h --extensions --exclude --min-size --max-size --modified-after --modified-before --max-depth --follow-symlinks --on-error --batch-concurrency --no-dry-run --hard-delete --allow-unfiltered-delete --quiet --config --no-update-check --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --extensions)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --exclude)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --min-size)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --max-size)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --modified-after)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --modified-before)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --max-depth)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --on-error)
+                    COMPREPLY=($(compgen -W "continue abort undo" -- "${cur}"))
+                    return 0
+                    ;;
+                --batch-concurrency)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 --config)

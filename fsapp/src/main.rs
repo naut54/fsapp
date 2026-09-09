@@ -1,5 +1,6 @@
 mod cli;
 mod completions;
+mod completions_notice;
 mod convert;
 mod fatal;
 mod progress;
@@ -12,7 +13,7 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 use clap::Parser;
-use cli::{BatchArgs, Command, FsSafetyArgs};
+use cli::{BatchArgs, Command, FsSafetyArgs, RemoveBatchArgs};
 use file_engine::FileEngine;
 use fs_config::Config;
 
@@ -68,11 +69,37 @@ async fn main() -> ExitCode {
         Command::UpdateCheck | Command::Completions { .. } => {
             unreachable!("handled above, before the automatic check")
         }
-        Command::Copy { source, dest, batch, safety, overwrite, max_bytes_per_batch, max_files_per_batch, sort_order } => {
-            run_copy(&config, quiet, source, dest, batch, safety, overwrite, max_bytes_per_batch, max_files_per_batch, sort_order).await
+        Command::Copy {
+            source,
+            dest,
+            batch,
+            safety,
+            overwrite,
+            skip_if_identical,
+            max_bytes_per_batch,
+            max_files_per_batch,
+            sort_order,
+        } => {
+            run_copy(
+                &config,
+                quiet,
+                source,
+                dest,
+                batch,
+                safety,
+                overwrite,
+                skip_if_identical,
+                max_bytes_per_batch,
+                max_files_per_batch,
+                sort_order,
+            )
+            .await
         }
-        Command::Mv { source, dest, batch, safety, overwrite } => {
-            run_mv(&config, quiet, source, dest, batch, safety, overwrite).await
+        Command::Mv { source, dest, batch, safety, overwrite, skip_if_identical } => {
+            run_mv(&config, quiet, source, dest, batch, safety, overwrite, skip_if_identical).await
+        }
+        Command::MvMany { sources, dest, batch, safety, overwrite, skip_if_identical } => {
+            run_mv_many(&config, quiet, sources, dest, batch, safety, overwrite, skip_if_identical).await
         }
         Command::Sync { source, dest, batch, safety, no_overwrite, checksum } => {
             run_sync(&config, quiet, source, dest, batch, safety, no_overwrite, checksum).await
@@ -112,11 +139,48 @@ async fn main() -> ExitCode {
             )
             .await
         }
+        Command::Remove {
+            path,
+            extensions,
+            exclude,
+            min_size,
+            max_size,
+            modified_after,
+            modified_before,
+            max_depth,
+            follow_symlinks,
+            batch,
+            no_dry_run,
+            hard_delete,
+            allow_unfiltered_delete,
+        } => {
+            run_remove(
+                quiet,
+                path,
+                extensions,
+                exclude,
+                min_size,
+                max_size,
+                modified_after,
+                modified_before,
+                max_depth,
+                follow_symlinks,
+                batch,
+                no_dry_run,
+                hard_delete,
+                allow_unfiltered_delete,
+            )
+            .await
+        }
     };
 
     if let Some(rx) = update_task {
         report_update(rx);
     }
+    // `UpdateCheck`/`Completions` already returned above, so this only
+    // ever runs for an actual operation — never nags someone who's
+    // already looking at the completions machinery.
+    completions_notice::maybe_print(quiet);
 
     ExitCode::from(code as u8)
 }
@@ -268,6 +332,7 @@ fn context_message(verb: &str, source: &Path, dest: &Path) -> String {
     format!("could not {verb} \"{}\" to \"{}\"", source.display(), dest.display())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_copy(
     config: &Config,
     quiet: bool,
@@ -276,6 +341,7 @@ async fn run_copy(
     batch: BatchArgs,
     safety: FsSafetyArgs,
     overwrite: bool,
+    skip_if_identical: bool,
     max_bytes_per_batch: Option<u64>,
     max_files_per_batch: Option<u64>,
     sort_order: Option<fs_config::SortOrder>,
@@ -283,6 +349,12 @@ async fn run_copy(
     let batch_r = resolve_batch("copy", &batch, config);
     let safety_r = resolve_safety("copy", &safety, config);
     let overwrite = resolve::resolve_bool(overwrite, "copy", "overwrite", config.copy.as_ref().and_then(|c| c.overwrite));
+    let skip_if_identical = resolve::resolve_bool(
+        skip_if_identical,
+        "copy",
+        "skip-if-identical",
+        config.copy.as_ref().and_then(|c| c.skip_if_identical),
+    );
     let max_bytes_per_batch = resolve::resolve(
         max_bytes_per_batch,
         "copy",
@@ -299,7 +371,7 @@ async fn run_copy(
     let sort_order = resolve::resolve(sort_order, "copy", "sort-order", config.copy.as_ref().and_then(|c| c.sort_order))
         .map(convert::to_sort_order);
 
-    let mut builder = FileEngine::new().copy(&source, &dest).overwrite(overwrite);
+    let mut builder = FileEngine::new().copy(&source, &dest).overwrite(overwrite).skip_if_identical(skip_if_identical);
     if let Some(v) = batch_r.small_file_threshold {
         builder = builder.small_file_threshold(v);
     }
@@ -364,12 +436,20 @@ async fn run_mv(
     batch: BatchArgs,
     safety: FsSafetyArgs,
     overwrite: bool,
+    skip_if_identical: bool,
 ) -> i32 {
     let batch_r = resolve_batch("mv", &batch, config);
     let safety_r = resolve_safety("mv", &safety, config);
     let overwrite = resolve::resolve_bool(overwrite, "mv", "overwrite", config.mv.as_ref().and_then(|c| c.overwrite));
+    let skip_if_identical = resolve::resolve_bool(
+        skip_if_identical,
+        "mv",
+        "skip-if-identical",
+        config.mv.as_ref().and_then(|c| c.skip_if_identical),
+    );
 
-    let mut builder = FileEngine::new().move_path(&source, &dest).overwrite(overwrite);
+    let mut builder =
+        FileEngine::new().move_path(&source, &dest).overwrite(overwrite).skip_if_identical(skip_if_identical);
     if let Some(v) = batch_r.small_file_threshold {
         builder = builder.small_file_threshold(v);
     }
@@ -401,6 +481,79 @@ async fn run_mv(
     // §7: same-filesystem `mv` may resolve with zero `Progress` events —
     // `drive()` treats "stream ended immediately, handle resolved Ok" as
     // the normal case already, nothing special needed here.
+    let progress::DriveResult { outcome, cancelled } = progress::drive(handle, quiet).await;
+    if cancelled {
+        return 130;
+    }
+    match outcome {
+        Ok(o) => {
+            if summary::print_operation_block("moved", &o, true) {
+                0
+            } else {
+                1
+            }
+        }
+        Err(e) => {
+            fatal::print_with_context("fsapp", &context, &e);
+            4
+        }
+    }
+}
+
+/// Shares the `mv` config section (`resolve_batch`/`resolve_safety` both
+/// take `"mv"`) rather than getting its own — `mv-many` is `mv` batched
+/// over several sources, not a distinct operation with its own defaults.
+#[allow(clippy::too_many_arguments)]
+async fn run_mv_many(
+    config: &Config,
+    quiet: bool,
+    sources: Vec<PathBuf>,
+    dest: PathBuf,
+    batch: BatchArgs,
+    safety: FsSafetyArgs,
+    overwrite: bool,
+    skip_if_identical: bool,
+) -> i32 {
+    let batch_r = resolve_batch("mv", &batch, config);
+    let safety_r = resolve_safety("mv", &safety, config);
+    let overwrite = resolve::resolve_bool(overwrite, "mv", "overwrite", config.mv.as_ref().and_then(|c| c.overwrite));
+    let skip_if_identical = resolve::resolve_bool(
+        skip_if_identical,
+        "mv",
+        "skip-if-identical",
+        config.mv.as_ref().and_then(|c| c.skip_if_identical),
+    );
+
+    let mut builder =
+        FileEngine::new().move_many(&sources, &dest).overwrite(overwrite).skip_if_identical(skip_if_identical);
+    if let Some(v) = batch_r.small_file_threshold {
+        builder = builder.small_file_threshold(v);
+    }
+    if let Some(v) = batch_r.batch_concurrency {
+        builder = builder.batch_concurrency(v);
+    }
+    if let Some(v) = batch_r.on_error {
+        builder = builder.on_error(v);
+    }
+    if safety_r.allow_fs_integrity_risk {
+        builder = builder.allow_filesystem_integrity_risk(true);
+    }
+    #[cfg(unix)]
+    let builder = if safety_r.preserve_permissions { builder.preserve_permissions(true) } else { builder };
+    #[cfg(not(unix))]
+    if safety_r.preserve_permissions {
+        tracing::warn!("--preserve-permissions is only supported on Unix; ignoring");
+    }
+
+    let context = format!("could not move {} sources to \"{}\"", sources.len(), dest.display());
+    let handle = match builder.start() {
+        Ok(h) => h,
+        Err(e) => {
+            fatal::print_with_context("fsapp", &context, &e);
+            return 4;
+        }
+    };
+
     let progress::DriveResult { outcome, cancelled } = progress::drive(handle, quiet).await;
     if cancelled {
         return 130;
@@ -650,6 +803,89 @@ async fn run_analyze(
             let ok = report.errors_total == 0;
             summary::print_analysis_report(&report);
             if ok {
+                0
+            } else {
+                1
+            }
+        }
+        Err(e) => {
+            fatal::print_with_context("fsapp", &context, &e);
+            4
+        }
+    }
+}
+
+/// No `resolve::resolve`/config-section plumbing here, unlike every
+/// mutating command above — deliberate, per cli.rs's doc comment on
+/// `Command::Remove`: CLI flags only, so nothing destructive can default
+/// out of a config file the invocation didn't mention.
+#[allow(clippy::too_many_arguments)]
+async fn run_remove(
+    quiet: bool,
+    path: PathBuf,
+    extensions: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+    min_size: Option<u64>,
+    max_size: Option<u64>,
+    modified_after: Option<std::time::SystemTime>,
+    modified_before: Option<std::time::SystemTime>,
+    max_depth: Option<usize>,
+    follow_symlinks: bool,
+    batch: RemoveBatchArgs,
+    no_dry_run: bool,
+    hard_delete: bool,
+    allow_unfiltered_delete: bool,
+) -> i32 {
+    let mut builder = FileEngine::new()
+        .remove(&path)
+        .follow_symlinks(follow_symlinks)
+        .dry_run(!no_dry_run)
+        .hard_delete(hard_delete)
+        .allow_unfiltered_delete(allow_unfiltered_delete);
+    if let Some(exts) = extensions {
+        builder = builder.extensions(exts);
+    }
+    if let Some(patterns) = exclude {
+        builder = builder.exclude(patterns);
+    }
+    if let Some(v) = min_size {
+        builder = builder.min_size(v);
+    }
+    if let Some(v) = max_size {
+        builder = builder.max_size(v);
+    }
+    if let Some(v) = modified_after {
+        builder = builder.modified_after(v);
+    }
+    if let Some(v) = modified_before {
+        builder = builder.modified_before(v);
+    }
+    if let Some(v) = max_depth {
+        builder = builder.max_depth(v);
+    }
+    if let Some(v) = batch.on_error {
+        builder = builder.on_error(convert::to_error_strategy(v));
+    }
+    if let Some(v) = batch.batch_concurrency {
+        builder = builder.batch_concurrency(v as usize);
+    }
+
+    let context = format!("could not remove \"{}\"", path.display());
+    let handle = match builder.start() {
+        Ok(h) => h,
+        Err(e) => {
+            fatal::print_with_context("fsapp", &context, &e);
+            return 4;
+        }
+    };
+
+    let progress::DriveResult { outcome, cancelled } = progress::drive(handle, quiet).await;
+    if cancelled {
+        return 130;
+    }
+    match outcome {
+        Ok(o) => {
+            if summary::print_remove_summary(&o, !no_dry_run, hard_delete) {
                 0
             } else {
                 1

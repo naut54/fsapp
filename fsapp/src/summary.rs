@@ -1,7 +1,7 @@
 //! §8.3 operation summary, printed to stdout on exit 0 or 1.
 
 use colored::Colorize;
-use file_engine::{AnalysisReport, OperationOutcome, StopReason, SyncOutcome};
+use file_engine::{AnalysisReport, OperationOutcome, RemoveOutcome, StopReason, SyncOutcome};
 
 use crate::progress::human_duration;
 
@@ -89,6 +89,54 @@ fn ordinal(n: usize) -> String {
         _ => "th",
     };
     format!("{n}{suffix}")
+}
+
+/// `dry_run`/`hard_delete` pick the wording, not the data — `outcome`
+/// already tells us which of `previewed`/`succeeded` is populated (dry-run
+/// never fails an entry, so the failed/stopped-early blocks below only
+/// ever fire on a real run). Returns whether this was a full success, same
+/// convention as `print_operation_block`.
+pub fn print_remove_summary(outcome: &RemoveOutcome, dry_run: bool, hard_delete: bool) -> bool {
+    if dry_run {
+        let bytes: u64 = outcome.previewed.iter().map(|e| e.size).sum();
+        println!(
+            "{} {} entries would be removed ({})",
+            "\u{26A0}".yellow(),
+            outcome.previewed.len(),
+            human_bytes(bytes)
+        );
+        for entry in &outcome.previewed {
+            println!("  - {}", entry.relative_path.display());
+        }
+        return true;
+    }
+
+    let verb = if hard_delete { "removed" } else { "trashed" };
+    let bytes: u64 = outcome.succeeded.iter().map(|e| e.size).sum();
+    println!(
+        "{} {} entries {verb} ({}) in {}",
+        "\u{2713}".green(),
+        outcome.succeeded.len(),
+        human_bytes(bytes),
+        human_duration(outcome.duration)
+    );
+
+    if !outcome.failed.is_empty() {
+        println!("{} {} entries failed:", "\u{2717}".red(), outcome.failed.len());
+        for (entry, err) in &outcome.failed {
+            println!("  - {}: {err}", entry.relative_path.display());
+        }
+    }
+
+    if let Some(reason) = outcome.stopped_early {
+        println!(
+            "{} stopped early: {}",
+            "\u{26A0}".yellow(),
+            stop_reason_message(reason, outcome.failed.len())
+        );
+    }
+
+    outcome.failed.is_empty() && outcome.stopped_early.is_none()
 }
 
 pub fn print_analysis_report(report: &AnalysisReport) {

@@ -26,6 +26,7 @@ pub fn get(config: &Config, section: &str, key: &str) -> Result<Option<String>, 
         ("copy", "preserve-permissions") => opt!(config.copy, preserve_permissions),
         ("copy", "allow-fs-integrity-risk") => opt!(config.copy, allow_fs_integrity_risk),
         ("copy", "overwrite") => opt!(config.copy, overwrite),
+        ("copy", "skip-if-identical") => opt!(config.copy, skip_if_identical),
         ("copy", "max-bytes-per-batch") => opt!(config.copy, max_bytes_per_batch),
         ("copy", "max-files-per-batch") => opt!(config.copy, max_files_per_batch),
         ("copy", "sort-order") => opt!(config.copy, sort_order),
@@ -36,6 +37,7 @@ pub fn get(config: &Config, section: &str, key: &str) -> Result<Option<String>, 
         ("mv", "preserve-permissions") => opt!(config.mv, preserve_permissions),
         ("mv", "allow-fs-integrity-risk") => opt!(config.mv, allow_fs_integrity_risk),
         ("mv", "overwrite") => opt!(config.mv, overwrite),
+        ("mv", "skip-if-identical") => opt!(config.mv, skip_if_identical),
 
         ("sync", "on-error") => opt!(config.sync, on_error),
         ("sync", "small-file-threshold") => opt!(config.sync, small_file_threshold),
@@ -78,6 +80,7 @@ pub fn set(config: &mut Config, section: &str, key: &str, value: &str) -> Result
             set_field!(config.copy, allow_fs_integrity_risk, parse_bool)
         }
         ("copy", "overwrite") => set_field!(config.copy, overwrite, parse_bool),
+        ("copy", "skip-if-identical") => set_field!(config.copy, skip_if_identical, parse_bool),
         ("copy", "max-bytes-per-batch") => set_field!(config.copy, max_bytes_per_batch, parse_u64),
         ("copy", "max-files-per-batch") => set_field!(config.copy, max_files_per_batch, parse_u64),
         ("copy", "sort-order") => set_field!(config.copy, sort_order, parse_enum::<SortOrder>),
@@ -90,6 +93,7 @@ pub fn set(config: &mut Config, section: &str, key: &str, value: &str) -> Result
             set_field!(config.mv, allow_fs_integrity_risk, parse_bool)
         }
         ("mv", "overwrite") => set_field!(config.mv, overwrite, parse_bool),
+        ("mv", "skip-if-identical") => set_field!(config.mv, skip_if_identical, parse_bool),
 
         ("sync", "on-error") => set_field!(config.sync, on_error, parse_enum::<OnError>),
         ("sync", "small-file-threshold") => set_field!(config.sync, small_file_threshold, parse_u64),
@@ -135,6 +139,7 @@ pub fn unset(config: &mut Config, section: &str, key: &str) -> Result<(), String
         ("copy", "preserve-permissions") => clear_field!(config.copy, preserve_permissions),
         ("copy", "allow-fs-integrity-risk") => clear_field!(config.copy, allow_fs_integrity_risk),
         ("copy", "overwrite") => clear_field!(config.copy, overwrite),
+        ("copy", "skip-if-identical") => clear_field!(config.copy, skip_if_identical),
         ("copy", "max-bytes-per-batch") => clear_field!(config.copy, max_bytes_per_batch),
         ("copy", "max-files-per-batch") => clear_field!(config.copy, max_files_per_batch),
         ("copy", "sort-order") => clear_field!(config.copy, sort_order),
@@ -145,6 +150,7 @@ pub fn unset(config: &mut Config, section: &str, key: &str) -> Result<(), String
         ("mv", "preserve-permissions") => clear_field!(config.mv, preserve_permissions),
         ("mv", "allow-fs-integrity-risk") => clear_field!(config.mv, allow_fs_integrity_risk),
         ("mv", "overwrite") => clear_field!(config.mv, overwrite),
+        ("mv", "skip-if-identical") => clear_field!(config.mv, skip_if_identical),
 
         ("sync", "on-error") => clear_field!(config.sync, on_error),
         ("sync", "small-file-threshold") => clear_field!(config.sync, small_file_threshold),

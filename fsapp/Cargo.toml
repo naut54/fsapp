@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Operational CLI (fsapp) and config CLI (fset) for copy/mv/sync/watch/compress, backed by file-engine"
+description = "Operational CLI (fsapp) and config CLI (fset) for copy/mv/sync/watch/compress/analyze/remove, backed by file-engine"
 
 [[bin]]
 name = "fsapp"
@@ -18,8 +18,10 @@ path = "src/bin/fset/main.rs"
 
 [dependencies]
 fs-config = { path = "../fs-config" }
-file-engine = { version = "2.2.0", features = ["sync", "watch", "compress", "checksum", "permissions", "analyze"] }
+file-engine = { version = "2.4.0", features = ["sync", "watch", "compress", "checksum", "permissions", "analyze", "remove"] }
 clap = { version = "4", features = ["derive"] }
+# `--modified-after`/`--modified-before` on `remove` only: RFC3339 -> SystemTime.
+humantime = "2"
 serde = "1"
 serde_json = "1"
 thiserror = "1"

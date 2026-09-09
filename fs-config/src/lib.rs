@@ -8,7 +8,7 @@ mod schema;
 pub use backup::backup_config;
 pub use enums::{CompressFormat, OnError, SortOrder};
 pub use error::ConfigError;
-pub use path::{resolve_config_path, update_cache_path};
+pub use path::{completions_notice_cache_path, resolve_config_path, update_cache_path};
 pub use recovery::load_with_recovery;
 pub use schema::{
     Config, CompressSection, CopySection, GlobalSection, MvSection, SyncSection, UpdateSection,

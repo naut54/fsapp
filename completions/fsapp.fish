@@ -32,10 +32,12 @@ complete -c fsapp -n "__fish_fsapp_needs_command" -s h -l help -d 'Print help'
 complete -c fsapp -n "__fish_fsapp_needs_command" -s V -l version -d 'Print version'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "copy" -d 'Copy files from SOURCE to DEST'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "mv" -d 'Move files from SOURCE to DEST'
+complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "mv-many" -d 'Move several independent SOURCES into one DEST directory as a single batched operation — each source keeps its own basename under DEST, which must be a directory sources land inside, never a rename target the way `mv`\'s DEST can be'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "sync" -d 'Sync DEST to match SOURCE (copies changes, deletes orphans)'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "watch" -d 'Watch PATH for filesystem changes and print events until Ctrl+C'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "compress" -d 'Compress SOURCE into an archive at DEST'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "analyze" -d 'Inspect a tree read-only: counts, sizes, largest files, extension and age breakdowns, and optionally MIME types and duplicates'
+complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "remove" -d 'Delete files under PATH matching the given criteria. Previews matches without touching anything unless --no-dry-run is passed, and refuses to run at all with no filter criteria set unless --allow-unfiltered-delete opts in explicitly — deliberately no config-file section for this command: a destructive default (hard-delete, or an unfiltered delete) has no business sitting in a JSON file that isn\'t part of the invocation you\'re looking at'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "update-check" -d 'Check whether a newer fsapp release is available'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "completions" -d 'Print a shell completion script, or install it with --install'
 complete -c fsapp -n "__fish_fsapp_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
@@ -52,6 +54,7 @@ complete -c fsapp -n "__fish_fsapp_using_subcommand copy" -l config -d 'Override
 complete -c fsapp -n "__fish_fsapp_using_subcommand copy" -l preserve-permissions
 complete -c fsapp -n "__fish_fsapp_using_subcommand copy" -l allow-fs-integrity-risk
 complete -c fsapp -n "__fish_fsapp_using_subcommand copy" -l overwrite
+complete -c fsapp -n "__fish_fsapp_using_subcommand copy" -l skip-if-identical -d 'Only consulted with --overwrite unset: an already-identical destination is left alone instead of failing; a genuinely different one still fails'
 complete -c fsapp -n "__fish_fsapp_using_subcommand copy" -s v -d '-v info, -vv debug, -vvv trace (default: warn)'
 complete -c fsapp -n "__fish_fsapp_using_subcommand copy" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
 complete -c fsapp -n "__fish_fsapp_using_subcommand copy" -l no-update-check -d 'Skip the automatic check for a newer fsapp release'
@@ -65,10 +68,25 @@ complete -c fsapp -n "__fish_fsapp_using_subcommand mv" -l config -d 'Override t
 complete -c fsapp -n "__fish_fsapp_using_subcommand mv" -l preserve-permissions
 complete -c fsapp -n "__fish_fsapp_using_subcommand mv" -l allow-fs-integrity-risk
 complete -c fsapp -n "__fish_fsapp_using_subcommand mv" -l overwrite
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv" -l skip-if-identical -d 'Only consulted with --overwrite unset: an already-identical destination is left alone instead of failing; a genuinely different one still fails'
 complete -c fsapp -n "__fish_fsapp_using_subcommand mv" -s v -d '-v info, -vv debug, -vvv trace (default: warn)'
 complete -c fsapp -n "__fish_fsapp_using_subcommand mv" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
 complete -c fsapp -n "__fish_fsapp_using_subcommand mv" -l no-update-check -d 'Skip the automatic check for a newer fsapp release'
 complete -c fsapp -n "__fish_fsapp_using_subcommand mv" -s h -l help -d 'Print help'
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -l small-file-threshold -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -l batch-concurrency -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -l on-error -r -f -a "continue\t''
+abort\t''
+undo\t''"
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -l config -d 'Override the config file location for this invocation' -r -F
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -l preserve-permissions
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -l allow-fs-integrity-risk
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -l overwrite
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -l skip-if-identical -d 'Only consulted with --overwrite unset: an already-identical destination is left alone instead of failing; a genuinely different one still fails'
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -s v -d '-v info, -vv debug, -vvv trace (default: warn)'
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -l no-update-check -d 'Skip the automatic check for a newer fsapp release'
+complete -c fsapp -n "__fish_fsapp_using_subcommand mv-many" -s h -l help -d 'Print help'
 complete -c fsapp -n "__fish_fsapp_using_subcommand sync" -l small-file-threshold -r
 complete -c fsapp -n "__fish_fsapp_using_subcommand sync" -l batch-concurrency -r
 complete -c fsapp -n "__fish_fsapp_using_subcommand sync" -l on-error -r -f -a "continue\t''
@@ -117,6 +135,26 @@ complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -s v -d '-v info, -
 complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
 complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -l no-update-check -d 'Skip the automatic check for a newer fsapp release'
 complete -c fsapp -n "__fish_fsapp_using_subcommand analyze" -s h -l help -d 'Print help'
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l extensions -d 'Only files with one of these extensions (no leading dot)' -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l exclude -d 'Glob patterns, matched relative to PATH, that spare an otherwise-matching entry' -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l min-size -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l max-size -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l modified-after -d 'RFC3339 timestamp, e.g. 2026-01-01T00:00:00Z' -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l modified-before -d 'RFC3339 timestamp, e.g. 2026-01-01T00:00:00Z' -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l max-depth -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l on-error -r -f -a "continue\t''
+abort\t''
+undo\t''"
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l batch-concurrency -r
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l config -d 'Override the config file location for this invocation' -r -F
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l follow-symlinks
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l no-dry-run -d 'Inverts the builder\'s default of `true`: actually delete matches instead of only previewing them'
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l hard-delete -d 'Unlink matches permanently instead of moving them to the platform trash/recycle bin'
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l allow-unfiltered-delete -d 'Required to proceed when no filter criterion above is set — otherwise an unfiltered PATH (matching everything under it) is refused before anything is touched'
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -s v -d '-v info, -vv debug, -vvv trace (default: warn)'
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -l no-update-check -d 'Skip the automatic check for a newer fsapp release'
+complete -c fsapp -n "__fish_fsapp_using_subcommand remove" -s h -l help -d 'Print help'
 complete -c fsapp -n "__fish_fsapp_using_subcommand update-check" -l config -d 'Override the config file location for this invocation' -r -F
 complete -c fsapp -n "__fish_fsapp_using_subcommand update-check" -s v -d '-v info, -vv debug, -vvv trace (default: warn)'
 complete -c fsapp -n "__fish_fsapp_using_subcommand update-check" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
@@ -129,12 +167,14 @@ complete -c fsapp -n "__fish_fsapp_using_subcommand completions" -s v -d '-v inf
 complete -c fsapp -n "__fish_fsapp_using_subcommand completions" -s q -l quiet -d 'Suppress the progress bar; logging still follows -v'
 complete -c fsapp -n "__fish_fsapp_using_subcommand completions" -l no-update-check -d 'Skip the automatic check for a newer fsapp release'
 complete -c fsapp -n "__fish_fsapp_using_subcommand completions" -s h -l help -d 'Print help'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "copy" -d 'Copy files from SOURCE to DEST'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "mv" -d 'Move files from SOURCE to DEST'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "sync" -d 'Sync DEST to match SOURCE (copies changes, deletes orphans)'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "watch" -d 'Watch PATH for filesystem changes and print events until Ctrl+C'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "compress" -d 'Compress SOURCE into an archive at DEST'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "analyze" -d 'Inspect a tree read-only: counts, sizes, largest files, extension and age breakdowns, and optionally MIME types and duplicates'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "update-check" -d 'Check whether a newer fsapp release is available'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "completions" -d 'Print a shell completion script, or install it with --install'
-complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv sync watch compress analyze update-check completions help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "copy" -d 'Copy files from SOURCE to DEST'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "mv" -d 'Move files from SOURCE to DEST'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "mv-many" -d 'Move several independent SOURCES into one DEST directory as a single batched operation — each source keeps its own basename under DEST, which must be a directory sources land inside, never a rename target the way `mv`\'s DEST can be'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "sync" -d 'Sync DEST to match SOURCE (copies changes, deletes orphans)'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "watch" -d 'Watch PATH for filesystem changes and print events until Ctrl+C'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "compress" -d 'Compress SOURCE into an archive at DEST'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "analyze" -d 'Inspect a tree read-only: counts, sizes, largest files, extension and age breakdowns, and optionally MIME types and duplicates'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "remove" -d 'Delete files under PATH matching the given criteria. Previews matches without touching anything unless --no-dry-run is passed, and refuses to run at all with no filter criteria set unless --allow-unfiltered-delete opts in explicitly — deliberately no config-file section for this command: a destructive default (hard-delete, or an unfiltered delete) has no business sitting in a JSON file that isn\'t part of the invocation you\'re looking at'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "update-check" -d 'Check whether a newer fsapp release is available'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "completions" -d 'Print a shell completion script, or install it with --install'
+complete -c fsapp -n "__fish_fsapp_using_subcommand help; and not __fish_seen_subcommand_from copy mv mv-many sync watch compress analyze remove update-check completions help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'

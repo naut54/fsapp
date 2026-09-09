@@ -130,6 +130,21 @@ fn homebrew_prefix() -> Option<PathBuf> {
     Some(PathBuf::from(prefix))
 }
 
+/// Whether `bin_name`'s completion script for `shell` is already sitting
+/// in one of its candidate directories — the same list `install` writes
+/// into, checked without writing anything. Used for the first-run nudge
+/// (`completions_notice.rs`), which only `fsapp`'s `main.rs` calls —
+/// hence the `allow`, since this module is shared into `fset` too (see
+/// the module doc) and `fset` has no such nudge of its own. Not used by
+/// `--install` itself, which always writes to the first *writable*
+/// candidate regardless of whether a later one already has a (possibly
+/// stale) copy.
+#[allow(dead_code)]
+pub fn is_installed(bin_name: &str, shell: Shell) -> bool {
+    let file_name = script_name(bin_name, shell);
+    candidate_dirs(shell).iter().any(|dir| dir.join(&file_name).is_file())
+}
+
 pub struct Installed {
     pub path: PathBuf,
     /// Set when the chosen directory isn't one the shell reads

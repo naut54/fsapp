@@ -39,6 +39,19 @@ pub fn update_cache_path() -> Result<PathBuf, ConfigError> {
         .ok_or(ConfigError::NoConfigDir)
 }
 
+/// Where the completions first-run nudge remembers which shell it already
+/// showed its notice for. Same reasoning as `update_cache_path`: machine
+/// state, not configuration, so it tracks the platform config dir (or
+/// `FSAPP_CACHE_DIR`) regardless of any `--config` override.
+pub fn completions_notice_cache_path() -> Result<PathBuf, ConfigError> {
+    if let Ok(dir) = std::env::var("FSAPP_CACHE_DIR") {
+        return Ok(PathBuf::from(dir).join("completions-notice.json"));
+    }
+    dirs::config_dir()
+        .map(|dir| dir.join("fsapp").join("completions-notice.json"))
+        .ok_or(ConfigError::NoConfigDir)
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;

@@ -45,18 +45,20 @@ fs-workspace/
 `fs-config` is a plain library crate (no `[[bin]]`), pulled in as a path
 dependency by the `fsapp` package (both binaries in it).
 
-## 3. `file-engine` 2.0.0 — verified public API
+## 3. `file-engine` 2.4.0 — verified public API
 
 **This was verified by actually compiling against the crate**, not just
 reading its docs — the crate's public API had a real bug in 1.1.0 (several
 `pub` types were unreachable from outside the crate because their containing
 modules weren't `pub`), which Eduardo fixed and republished as 1.1.1. All of
-the surface below was confirmed to compile against 2.0.0.
+the surface below was confirmed to compile against 2.4.0 (built into
+`fsapp` 0.8.0 — `remove`, `mv-many`, and `--skip-if-identical` all
+exercise it, not just `copy`/`mv`/`sync`/`watch`/`compress`/`analyze`).
 
 Add to `fsapp`'s `Cargo.toml`:
 
 ```toml
-file-engine = { version = "2.0.0", features = ["sync", "watch", "compress", "checksum", "permissions"] }
+file-engine = { version = "2.4.0", features = ["sync", "watch", "compress", "checksum", "permissions", "analyze", "remove"] }
 ```
 
 **2.0.0 upgrade note.** Every public output type — `Progress`,
@@ -66,43 +68,105 @@ arm, and later additions to any of them stop being breaking changes.
 Builders, `Handle<T>`, `Error`, and the feature flags are unchanged from
 1.x. See §7 for what the release added to the progress renderer.
 
-(`operations` and `analyze` are enabled by default already.)
+**2.1.0 → 2.4.0, additive throughout — no breaking changes on top of
+2.0.0's.** In order:
+
+- **2.1.0** added `FileEngine::analyze()` / `AnalyzeBuilder` (feature
+  `analyze`, on by default) — read-only tree inspection, its own
+  `AnalysisHandle`/`AnalysisProgress`/`AnalysisReport`/
+  `AnalysisErrorStrategy` types, deliberately not reusing `Handle<T>`/
+  `Progress`/`ErrorStrategy` (see §3.4 item 10).
+- **2.2.0** replaced `analyze`'s tree walk internals (`walkdir` →
+  `jwalk`, multithreaded) and added `AnalyzeBuilder::walk_concurrency`.
+  No API removed; `profiler::scan` (feature `operations`) is untouched
+  and still uses `walkdir`.
+- **2.3.0** added `FileEngine::move_many()` / `MoveManyBuilder` (batches
+  several sources into one destination directory under one
+  `Handle<OperationOutcome>`) and `.skip_if_identical(bool)` on
+  `CopyBuilder`/`MoveBuilder`/`MoveManyBuilder` (feature `checksum`).
+  Also fixed two `MoveBuilder` atomic-rename bugs — a missing destination
+  parent directory is now created instead of misreported as
+  `Error::SourceNotFound`, and `.overwrite(false)` is now actually
+  enforced on that fast path instead of deferring to `rename(2)`'s native
+  overwrite semantics — both transparent to `fsapp mv`, no flag changes.
+- **2.4.0** added `FileEngine::remove()` / `RemoveBuilder` (feature
+  `remove`) — the one genuinely new, and only destructive, addition.
+  Unlike `analyze`, it reuses the existing `Handle<T>`/`Progress`/
+  `ErrorStrategy` machinery (see §3.4 item 11).
+
+(`operations` and `analyze` are enabled by default already; `remove` is
+not and must be requested explicitly, same as `sync`/`watch`/`compress`.)
 
 ### 3.1 `FileEngine` entry points
 
 ```rust
 FileEngine::new()
-  .copy(source, dest)      -> CopyBuilder      // feature = "operations" (default)
-  .move_path(source, dest) -> MoveBuilder      // feature = "operations" (default)
-  .sync(source, dest)      -> SyncBuilder      // feature = "sync"
-  .watch(path)              -> WatchBuilder     // feature = "watch"
-  .compress(source, dest)  -> CompressBuilder  // feature = "compress"
+  .copy(source, dest)       -> CopyBuilder      // feature = "operations" (default)
+  .move_path(source, dest)  -> MoveBuilder      // feature = "operations" (default)
+  .move_many(sources, dest) -> MoveManyBuilder  // feature = "operations" (default); 2.3.0
+  .sync(source, dest)       -> SyncBuilder      // feature = "sync"
+  .watch(path)               -> WatchBuilder     // feature = "watch"
+  .compress(source, dest)   -> CompressBuilder  // feature = "compress"
+  .analyze(path)             -> AnalyzeBuilder   // feature = "analyze" (default); 2.1.0
+  .remove(path)              -> RemoveBuilder    // feature = "remove"; 2.4.0
 ```
 
 ### 3.2 Builder methods (exhaustive, per builder)
 
-| Method | `CopyBuilder` | `MoveBuilder` | `SyncBuilder` | `WatchBuilder` | `CompressBuilder` |
-|---|---|---|---|---|---|
-| `.overwrite(bool)` | ✅ default `false` | ✅ default `false` | ✅ default `true` | — | — |
-| `.on_error(ErrorStrategy)` | ✅ | ✅ | ✅ | — | ✅ |
-| `.small_file_threshold(u64)` | ✅ | ✅ | ✅ | — | ✅ |
-| `.batch_concurrency(usize)` | ✅ | ✅ | ✅ | — | ✅ |
-| `.max_bytes_per_batch(u64)` | ✅ **copy only** | ❌ | ❌ | — | ❌ |
-| `.max_files_per_batch(usize)` | ✅ **copy only** | ❌ | ❌ | — | ❌ |
-| `.batch_sort_order(SortOrder)` | ✅ **copy only** | ❌ | ❌ | — | ❌ |
-| `.preserve_permissions(bool)` | ✅ `#[cfg(unix)]` only, feature `permissions` | ✅ same cfg | ✅ same cfg | — | ❌ |
-| `.allow_filesystem_integrity_risk(bool)` | ✅ | ✅ | ✅ | — | ❌ |
-| `.diff_strategy(DiffStrategy)` | — | — | ✅ **sync only** | — | — |
-| `.recursive(bool)` | — | — | — | ✅ default `true` | — |
-| `.format(CompressFormat)` | — | — | — | — | ✅ |
-| `.start()` return type | `Result<Handle<OperationOutcome>>` | `Result<Handle<OperationOutcome>>` | `Result<Handle<SyncOutcome>>` | `Result<WatchHandle>` | `Result<Handle<OperationOutcome>>` |
+| Method | `CopyBuilder` | `MoveBuilder` | `MoveManyBuilder` | `SyncBuilder` | `WatchBuilder` | `CompressBuilder` |
+|---|---|---|---|---|---|---|
+| `.overwrite(bool)` | ✅ default `false` | ✅ default `false` | ✅ default `false` | ✅ default `true` | — | — |
+| `.skip_if_identical(bool)` (2.3.0, feature `checksum`) | ✅ default `false` | ✅ default `false` | ✅ default `false`, applied per source | ❌ | — | — |
+| `.on_error(ErrorStrategy)` | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| `.small_file_threshold(u64)` | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| `.batch_concurrency(usize)` | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| `.max_bytes_per_batch(u64)` | ✅ **copy only** | ❌ | ❌ | ❌ | — | ❌ |
+| `.max_files_per_batch(usize)` | ✅ **copy only** | ❌ | ❌ | ❌ | — | ❌ |
+| `.batch_sort_order(SortOrder)` | ✅ **copy only** | ❌ | ❌ | ❌ | — | ❌ |
+| `.preserve_permissions(bool)` | ✅ `#[cfg(unix)]` only, feature `permissions` | ✅ same cfg | ✅ same cfg | ✅ same cfg | — | ❌ |
+| `.allow_filesystem_integrity_risk(bool)` | ✅ | ✅ | ✅ | ✅ | — | ❌ |
+| `.diff_strategy(DiffStrategy)` | — | — | — | ✅ **sync only** | — | — |
+| `.recursive(bool)` | — | — | — | — | ✅ default `true` | — |
+| `.format(CompressFormat)` | — | — | — | — | — | ✅ |
+| `.start()` return type | `Result<Handle<OperationOutcome>>` | `Result<Handle<OperationOutcome>>` | `Result<Handle<OperationOutcome>>` | `Result<Handle<SyncOutcome>>` | `Result<WatchHandle>` | `Result<Handle<OperationOutcome>>` |
 
 `.preserve_permissions()` **does not exist as a method at all** on non-Unix
 targets (it's `#[cfg(all(unix, feature = "permissions"))]` on the crate side).
 Any call site in `fsapp` must be behind `#[cfg(unix)]`, with a runtime warning
-on other platforms if the user asked for it.
+on other platforms if the user asked for it. `MoveManyBuilder` is
+constructed via `.move_many(sources, dest)`, not `.new()` — `dest` there is
+always the directory every source lands *inside*, never a rename target;
+this is also true of `.copy()`/`.move_path()`'s own `dest` (see §3.4
+item 12), it's just easiest to see once there's more than one source.
 
-### 3.3 Public types (all confirmed reachable at crate root in 2.0.0)
+### 3.2b `AnalyzeBuilder` / `RemoveBuilder` methods
+
+Neither shares a method surface with §3.2's copy-family builders in any
+meaningful way — different filters, different error-strategy types,
+different output — so they get their own table rather than more columns
+bolted onto the one above.
+
+| Method | `AnalyzeBuilder` (2.1.0) | `RemoveBuilder` (2.4.0) |
+|---|---|---|
+| `.extensions(impl IntoIterator<...>)` | ✅ | ✅ |
+| exclude-globs method | `.exclude_globs(...)` | `.exclude(...)` — **different name, same shape**; a call site templated on "the analyze/remove filter API" cannot share this one line |
+| `.min_size(u64)` / `.max_size(u64)` | ✅ | ✅ |
+| `.modified_after(SystemTime)` / `.modified_before(SystemTime)` | ✅ (not currently wired into `fsapp analyze`'s CLI — see §11) | ✅ |
+| `.max_depth(usize)` | ✅ | ✅ |
+| `.follow_symlinks(bool)` | ✅ default `false` | ✅ default `false` |
+| `.top_n_largest(usize)` | ✅ default `10` | — |
+| `.walk_concurrency(usize)` (2.2.0) | ✅ default: available parallelism | — |
+| `.detect_mime_types(bool)` (feature `analyze`) | ✅ default `false` | — |
+| `.detect_duplicates(bool)` / `.hash_concurrency(usize)` (feature `checksum`) | ✅ | — |
+| `.max_reported_errors(usize)` / `.max_reported_duplicates(usize)` | ✅ (not currently wired into `fsapp analyze`'s CLI — see §11) | — |
+| `.on_error(...)` | ✅ own `AnalysisErrorStrategy` (`ContinueAndCollect`/`AbortOnError` only — no `Undo`, analysis never writes anything) | ✅ shares `planner::ErrorStrategy` with the copy-family builders |
+| `.batch_concurrency(usize)` | — (no batching; only the walk itself is parallelized, via `.walk_concurrency`) | ✅ |
+| `.dry_run(bool)` | — | ✅ default `true` |
+| `.hard_delete(bool)` | — | ✅ default `false` (platform trash) |
+| `.allow_unfiltered_delete(bool)` | — | ✅ default `false` — see §3.4 item 13 |
+| `.start()` return type | `Result<AnalysisHandle>` | `Result<Handle<RemoveOutcome>>` |
+
+### 3.3 Public types (all confirmed reachable at crate root in 2.4.0)
 
 ```rust
 pub use file_engine::{
@@ -111,9 +175,13 @@ pub use file_engine::{
     EtaEstimator,                            // added in 2.0.0
     WatchEvent, WatchEventKind, WatchHandle, // watch feature
     CopyBuilder, MoveBuilder,
+    MoveManyBuilder,                         // operations feature — 2.3.0
     SyncBuilder, SyncOutcome,
     CompressBuilder, CompressFormat,
     WatchBuilder,
+    AnalyzeBuilder, AnalysisHandle, AnalysisProgress,
+    AnalysisReport, AnalysisErrorStrategy,   // analyze feature (default) — 2.1.0
+    RemoveBuilder, RemoveOutcome,            // remove feature — 2.4.0
     ErrorStrategy, OperationOutcome, SortOrder, StopReason, // planner — fixed in 1.1.1
     DiffStrategy,                            // operations::diff — fixed in 1.1.1
     Entry,                                    // profiler — fixed in 1.1.1
@@ -126,6 +194,9 @@ pub enum SortOrder { Ascending, Descending }
 pub enum DiffStrategy { SizeAndModifiedTime (default), Checksum } // Checksum requires feature "checksum"
 pub enum CompressFormat { Zip, Gzip }
 #[non_exhaustive] pub enum StopReason { Fatal, AbortOnError, Cancelled, Undo }
+// analyze's own error-strategy enum (2.1.0) — smaller than ErrorStrategy on
+// purpose: analysis never writes anything, so Undo has no meaning here.
+#[derive(Default)] pub enum AnalysisErrorStrategy { ContinueAndCollect (default), AbortOnError }
 
 #[non_exhaustive]
 pub struct OperationOutcome {
@@ -141,6 +212,45 @@ pub struct OperationOutcome {
 pub struct SyncOutcome {
     pub copy: OperationOutcome,
     pub delete: OperationOutcome,
+}
+
+// remove feature — 2.4.0. Also the return type Handle<T> is built around
+// (RemoveBuilder::start() -> Result<Handle<RemoveOutcome>>), unlike
+// AnalysisReport below, which has its own dedicated handle.
+#[non_exhaustive]
+pub struct RemoveOutcome {
+    pub succeeded: Vec<Entry>,   // actually removed; empty when dry_run
+    pub previewed: Vec<Entry>,   // matched but untouched; only non-empty when dry_run (the default)
+    pub failed: Vec<(Entry, Error)>,
+    pub stopped_early: Option<StopReason>,
+    pub duration: Duration,
+}
+
+// analyze feature (default) — 2.1.0, including the checksum-gated
+// duplicate fields. AnalysisHandle resolves to this, not OperationOutcome.
+#[non_exhaustive]
+pub struct AnalysisReport {
+    pub file_count: usize,
+    pub dir_count: usize,
+    pub total_size: u64,
+    pub largest_files: Vec<Entry>,           // capped at top_n_largest; Entry here is analysis::report::Entry, not profiler::Entry
+    pub by_extension: HashMap<String, ExtensionStats>, // "" key = no extension
+    pub by_mime: HashMap<String, MimeStats>, // empty unless detect_mime_types(true)
+    pub age_buckets: AgeBuckets,             // under_1_day/week/month/year, older, unknown
+    pub errors: Vec<(PathBuf, Error)>,       // sample, capped at max_reported_errors
+    pub errors_total: usize,                 // uncapped
+    pub duplicates: Vec<DuplicateGroup>,     // feature checksum; sample, capped at max_reported_duplicates
+    pub duplicate_groups_total: usize,       // feature checksum; uncapped
+    pub duplicate_bytes_wasted: u64,         // feature checksum; uncapped, sums every group found
+    pub duration: Duration,
+}
+
+// analyze feature (default) — 2.1.0. Deliberately NOT crate::progress::Progress
+// (see AnalysisHandle below) — smaller, and analysis-specific.
+#[non_exhaustive]
+pub enum AnalysisProgress {
+    EntryAnalyzed { path: PathBuf },         // once per matched entry, post-filter
+    EntryHashed { path: PathBuf },           // feature checksum; once per file during duplicate detection
 }
 
 #[non_exhaustive]
@@ -173,12 +283,26 @@ implements `Future<Output = Result<()>>`. **Structurally different from
 `Handle<T>`** — no `Progress`, no bounded outcome, the future just resolves to
 `Ok(())` on clean cancel or `Err` on a fatal watcher error (e.g. path removed).
 
+`AnalysisHandle` (2.1.0): `.progress() -> &mut impl Stream<Item =
+AnalysisProgress>`, `.cancel()`, implements `Future<Output =
+Result<AnalysisReport>>`. **A third, independently-typed handle** — same
+shape as `Handle<T>` (stream + cancel + awaitable) but a distinct
+concrete type on the same precedent `WatchHandle` already sets, not
+`Handle<AnalysisReport>`. `RemoveBuilder`, by contrast, resolves to the
+existing `Handle<RemoveOutcome>` — see §3.4 item 11 for why the two new
+2.x builders made opposite choices here.
+
 `Error` variants (via `thiserror`): `SourceNotFound`, `DestExists`,
 `Cancelled`, `NoSpace { needed, available }`, `PermissionDenied`, `Io { path,
 source }`, `UnknownCompressFormat` (compress), `GzipRequiresFile` (compress),
 `CaseCollision`, `FileTooLargeForDest`, `ReservedName`,
 `FilesystemIntegrityRisk { filesystem }` — the last one is the only "whole
-destination" fatal error not tied to a specific entry.
+destination" fatal error not tied to a specific entry. **2.4.0 adds**
+`RemoveCriteriaRequired` (feature `remove`) — returned by the awaited
+`Handle`, not by `.start()` itself, when `RemoveBuilder` has no filter
+criterion set and `.allow_unfiltered_delete(true)` wasn't passed — and
+`TrashFailed { path, source }` (feature `remove`), when the platform has
+no trash service and `.hard_delete(true)` wasn't passed to fall back to.
 
 ### 3.4 Hard behavioral constraints (do not design around these incorrectly)
 
@@ -214,6 +338,39 @@ destination" fatal error not tied to a specific entry.
    before the small-file batches instead of after all of them. So the
    renderer sees a streamed entry early rather than at ~95% elapsed. Don't
    assume `Progress` events arrive grouped small-then-large.
+10. **`analyze` has no `Progress` at all either** — like `watch`, but for
+    an unrelated reason: `AnalysisHandle`/`AnalysisProgress` live behind
+    the `analyze` feature, which doesn't require `operations` (the
+    feature `Handle`/`Progress` live behind). Genericizing `Handle<T>`
+    over the progress type would couple `analyze`-only builds to
+    `operations` for no benefit to existing callers. `fsapp`'s
+    `progress::drive_analyze` is consequently a third renderer, not a
+    reuse of `drive`'s — see §7.
+11. **`remove`, unlike `analyze`, reuses `Handle<T>`/`Progress`/
+    `ErrorStrategy` wholesale** — `RemoveBuilder::start()` returns
+    `Result<Handle<RemoveOutcome>>`, the same `Handle<T>` copy/mv/sync
+    use, because `remove` is gated on the `operations` feature already
+    being available in the same build (unlike `analyze`, which
+    deliberately isn't). Practical effect: `fsapp`'s existing
+    `progress::drive()` needs no changes at all to drive a `remove`
+    operation — confirmed by `main.rs::run_remove` doing exactly that.
+    In dry-run (the default), the spawned task returns before ever
+    calling `dispatch()`, so the progress stream closes immediately with
+    zero events — same "no events is not an error" shape as constraint 2.
+12. **`copy`/`move_path`/`move_many`'s `dest` is always a container
+    directory sources land *inside*, basename preserved — never a
+    `cp src dst-file`-style rename target**, confirmed against the
+    crate's own `pipeline.rs` test fixtures (a single source file lands
+    at `dest.join(source.file_name())`, not at `dest` itself). Easy to
+    assume otherwise from Unix `cp`/`mv` muscle memory; not obvious from
+    `fsapp --help` either.
+13. **`RemoveBuilder`'s empty-filter check runs before `dry_run` is
+    consulted, not after** — `.start()`'s `Handle` resolves to
+    `Err(Error::RemoveCriteriaRequired)` for an unfiltered `PATH` with no
+    `.allow_unfiltered_delete(true)`, even in dry-run. A preview of "every
+    entry under this root" is refused exactly as an actual unfiltered
+    delete would be, not treated as a safe no-op case worth allowing
+    through.
 
 ## 4. `fsapp` — CLI surface
 
@@ -449,16 +606,27 @@ config.json.bak-1735776000         # valid file, backed up before a manual `fset
   `--quiet` wasn't passed — independent of verbosity level, so "both,
   depending on verbosity" (Eduardo's requirement) means: the bar is a
   presentation layer, the log level is a separate axis.
-- Two different renderers are required, not one:
-  - A generic one over `Stream<Item = Progress>` for `copy`/`mv`/`sync`/`compress`.
-  - A separate one over `Stream<Item = WatchEvent>` for `watch`, which has no
-    bar (indefinite stream) — just formatted log lines per event, and a
-    clean exit on Ctrl+C via `.cancel()`.
+- Three different renderers are required, not one — `progress.rs`'s
+  `drive`/`drive_watch`/`drive_analyze`:
+  - A generic one over `Stream<Item = Progress>` (`drive`) for
+    `copy`/`mv`/`mv-many`/`sync`/`compress`, **and also `remove`** — it
+    reuses `Handle<T>`/`Progress` (§3.4 item 11), so it needed no changes
+    at all to add `remove` on top of the original four.
+  - A separate one over `Stream<Item = WatchEvent>` (`drive_watch`) for
+    `watch`, which has no bar (indefinite stream) — just formatted log
+    lines per event, and a clean exit on Ctrl+C via `.cancel()`.
+  - A third, spinner-only one over `Stream<Item = AnalysisProgress>`
+    (`drive_analyze`) for `analyze` (2.1.0) — no `Progress::Planned`
+    equivalent exists for a read-only walk that doesn't know the tree
+    size ahead of time, so there's no bar *length* to set, just a ticking
+    spinner and a live count of matched/hashed entries.
 - `mv`'s same-filesystem fast path may finish with **zero** `Progress`
   events — the renderer must treat "no events, but `Handle` resolved `Ok`"
-  as a normal, successful, silent case, not a bug.
+  as a normal, successful, silent case, not a bug. `remove` in dry-run
+  (the default) hits the same shape for a different reason: the spawned
+  task returns before calling `dispatch()` at all (§3.4 item 11).
 
-### 7.1 What the bar shows (file-engine 2.0.0)
+### 7.1 What the bar shows (file-engine 2.0.0–2.4.0)
 
 The bar's *position* is entry counts, as before. Everything else on the
 line comes from 2.0.0:
@@ -492,6 +660,21 @@ line comes from 2.0.0:
   before the first 250ms sample and emits **no** `EntryProgress` at all.
   That's correct, not a missing-events bug — verified: 1.2 GiB same-volume
   in 0.4s, no samples; the same tree across volumes samples normally.
+- **`remove`'s bar is this same one, unchanged** (§3.4 item 11) — a
+  removal is not size-scaled the way a copy/move is (nothing to stream),
+  so `Progress::Planned`'s `small_files`/`large_files` split still
+  arrives, but every matched entry lands in `small_files` regardless of
+  its actual size, and `EntryProgress` (the in-flight-file sampler) never
+  fires for it. `RemoveOutcome` has no `.duration` shown mid-run either —
+  same as every other operation, only known once the `Handle` resolves.
+- **`analyze`'s bar (`drive_analyze`) is a different one, not this one**
+  (2.1.0) — `indicatif::ProgressBar::new_spinner()` rather than
+  `{wide_bar}`, no `set_length`/`set_position` at all, message set to
+  `"{N} entries analyzed"` (or `"{N} files hashed for duplicates"` while
+  `.detect_duplicates(true)`'s hashing phase runs) on each
+  `AnalysisProgress` event instead of a percentage or byte rate. No ETA:
+  `EtaEstimator` is built around `Progress`, which `analyze` doesn't
+  produce.
 
 ## 8. Output & exit codes
 
@@ -702,6 +885,16 @@ pushes formula updates to.
 - Whether `compress`'s summary block needs any wording different from
   copy/mv's (e.g. "entries archived" vs "entries copied") — cosmetic, use
   judgment, but keep the `✓`/`✗`/`⚠` structure identical.
+- **`fsapp analyze`'s CLI doesn't expose everything `AnalyzeBuilder`
+  offers** (§3.2b): `.modified_after()`/`.modified_before()` (present
+  since 2.1.0 — `remove`'s CLI got these when it was added in 2.4.0,
+  `analyze`'s never did, which reads like an oversight rather than a
+  decision), `.max_reported_errors()`, and `.max_reported_duplicates()`
+  all have no corresponding flag. Whether to add them, and whether §4 (a
+  pre-analyze/remove/mv-many section that was never updated for any of
+  the three) is due a fuller pass while touching this, is a real scope
+  question — flag it rather than silently expanding one command's flags
+  as a side effect of an unrelated task.
 
 (`fset edit` validation order, GitHub owner/repo, tap repo name, edition/MSRV,
 license, and crates.io publishing were all open as of the previous revision

@@ -61,6 +61,8 @@ pub struct CopySection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overwrite: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_if_identical: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_bytes_per_batch: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_files_per_batch: Option<u64>,
@@ -83,6 +85,8 @@ pub struct MvSection {
     pub allow_fs_integrity_risk: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overwrite: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip_if_identical: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

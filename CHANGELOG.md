@@ -4,6 +4,69 @@ All notable changes to this project are documented here.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0]
+
+### Added
+
+- **`fsapp remove PATH`** — deletes files matching a set of criteria, from
+  `file-engine` 2.4.0's new `remove` feature. Built on the same filter
+  shape as `analyze` (`--extensions`, `--exclude`, `--min-size`/
+  `--max-size`, `--modified-after`/`--modified-before`, `--max-depth`,
+  `--follow-symlinks`), plus two defaults biased toward safety: previews
+  matches without touching anything unless `--no-dry-run` is passed, and
+  moves matches to the platform trash rather than unlinking them unless
+  `--hard-delete` is passed. Refuses to run at all with no filter
+  criterion set, unless `--allow-unfiltered-delete` opts in explicitly.
+  Deliberately has no `config.json` section, unlike every other
+  filesystem-mutating command — a destructive default has no business
+  sitting in a file the invocation didn't mention.
+
+- **`fsapp mv-many SOURCES... DEST`** — moves several independent sources
+  into one destination directory as a single batched operation, from
+  `file-engine` 2.3.0's new `FileEngine::move_many`: one shared
+  `--on-error` scope, concurrency pool, and progress stream across all of
+  them, rather than one `mv` call per source. Shares `mv`'s config
+  section rather than getting its own.
+
+- **`--skip-if-identical` on `copy`, `mv`, and `mv-many`** — from
+  `file-engine` 2.3.0. Only consulted with `--overwrite` unset: leaves an
+  already-identical destination alone (content-compared via blake3)
+  instead of failing with `DestExists`; a genuinely different destination
+  still fails.
+
+- **A first-run notice for missing shell completions.** After a normal
+  `fsapp` command, if `fsapp`'s or `fset`'s completion script isn't found
+  for the detected `$SHELL`, prints the exact command(s) to fix it — once
+  per shell, cached in `completions-notice.json` beside
+  `update-check.json`. Suppressed under the same conditions as the
+  automatic update check (`--quiet`, a non-tty stderr, `CI` set). Most
+  install channels (everything but `.deb`) leave completions inert until
+  `completions --install` is run once, and a README line doesn't reach
+  someone who never opened it.
+
+- **Homebrew formula now activates completions on install**, closing the
+  gap `.deb` was previously the only channel to close. A CI job now
+  patches the tap's formula (via Homebrew's own
+  `generate_completions_from_executable`) right after it's published,
+  rather than continuing to wait on the long-open upstream
+  `axodotdev/cargo-dist#2429`. Fails the release loudly, not silently, if
+  a future `dist` template change removes the line this patches onto.
+
+### Changed
+
+- **`file-engine` 2.2.0 → 2.4.0.** `MoveBuilder`'s atomic-rename fast path
+  now creates a missing destination parent directory (previously
+  misreported as `Error::SourceNotFound`) and actually enforces
+  `.overwrite(false)` instead of silently deferring to `rename(2)`'s
+  native overwrite semantics — both apply to `mv` with no flag changes.
+
+### Notes
+
+- `copy`/`mv`/`mv-many`'s `DEST` has always been (and remains) a
+  container directory sources land inside, basename preserved — never a
+  `cp a b`-style rename target. Worth restating here since it's easy to
+  assume otherwise and it isn't obvious from `--help` alone.
+
 ## [0.7.0]
 
 ### Added

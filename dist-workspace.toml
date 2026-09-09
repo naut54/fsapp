@@ -30,7 +30,12 @@ publish-jobs = ["homebrew"]
 # Ships the committed completion scripts in every archive and installer.
 # dist's Homebrew template dumps anything beyond the binaries and
 # auto-docs into `pkgshare`, so on Homebrew these land inert at
-# `$(brew --prefix)/share/fsapp/completions/` — present, but activated by
-# `fsapp completions --install` rather than by the formula. See
-# axodotdev/cargo-dist#2429 and docs/completions-design.md §4.2.
+# `$(brew --prefix)/share/fsapp/completions/` unless patched — see
+# `post-announce-jobs` below and docs/completions-design.md §4.2/§8.
 include = ["completions"]
+# Runs after `publish-homebrew-formula` has already committed this
+# release's formula to the tap — patches it in place to activate
+# completions via Homebrew's own `generate_completions_from_executable`,
+# closing the axodotdev/cargo-dist#2429 gap ourselves instead of waiting
+# on it. See .github/workflows/patch-homebrew-completions.yml.
+post-announce-jobs = ["./patch-homebrew-completions"]

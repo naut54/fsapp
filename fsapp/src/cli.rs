@@ -8,7 +8,7 @@ use fs_config::{CompressFormat, OnError, SortOrder};
 #[command(
     name = "fsapp",
     version,
-    about = "copy / mv / sync / watch / compress, backed by file-engine"
+    about = "copy / mv / sync / watch / compress / analyze / remove, backed by file-engine"
 )]
 pub struct Cli {
     /// -v info, -vv debug, -vvv trace (default: warn).
@@ -43,6 +43,11 @@ pub enum Command {
         safety: FsSafetyArgs,
         #[arg(long)]
         overwrite: bool,
+        /// Only consulted with --overwrite unset: an already-identical
+        /// destination is left alone instead of failing; a genuinely
+        /// different one still fails.
+        #[arg(long)]
+        skip_if_identical: bool,
         #[arg(long)]
         max_bytes_per_batch: Option<u64>,
         #[arg(long)]
@@ -60,6 +65,31 @@ pub enum Command {
         safety: FsSafetyArgs,
         #[arg(long)]
         overwrite: bool,
+        /// Only consulted with --overwrite unset: an already-identical
+        /// destination is left alone instead of failing; a genuinely
+        /// different one still fails.
+        #[arg(long)]
+        skip_if_identical: bool,
+    },
+    /// Move several independent SOURCES into one DEST directory as a
+    /// single batched operation — each source keeps its own basename
+    /// under DEST, which must be a directory sources land inside, never
+    /// a rename target the way `mv`'s DEST can be.
+    MvMany {
+        #[arg(required = true, num_args = 1..)]
+        sources: Vec<PathBuf>,
+        dest: PathBuf,
+        #[command(flatten)]
+        batch: BatchArgs,
+        #[command(flatten)]
+        safety: FsSafetyArgs,
+        #[arg(long)]
+        overwrite: bool,
+        /// Only consulted with --overwrite unset: an already-identical
+        /// destination is left alone instead of failing; a genuinely
+        /// different one still fails.
+        #[arg(long)]
+        skip_if_identical: bool,
     },
     /// Sync DEST to match SOURCE (copies changes, deletes orphans).
     Sync {
@@ -127,6 +157,52 @@ pub enum Command {
         #[arg(long)]
         abort_on_error: bool,
     },
+    /// Delete files under PATH matching the given criteria. Previews
+    /// matches without touching anything unless --no-dry-run is passed,
+    /// and refuses to run at all with no filter criteria set unless
+    /// --allow-unfiltered-delete opts in explicitly — deliberately no
+    /// config-file section for this command: a destructive default
+    /// (hard-delete, or an unfiltered delete) has no business sitting in
+    /// a JSON file that isn't part of the invocation you're looking at.
+    Remove {
+        path: PathBuf,
+        /// Only files with one of these extensions (no leading dot).
+        #[arg(long, value_delimiter = ',')]
+        extensions: Option<Vec<String>>,
+        /// Glob patterns, matched relative to PATH, that spare an
+        /// otherwise-matching entry.
+        #[arg(long, value_delimiter = ',')]
+        exclude: Option<Vec<String>>,
+        #[arg(long)]
+        min_size: Option<u64>,
+        #[arg(long)]
+        max_size: Option<u64>,
+        /// RFC3339 timestamp, e.g. 2026-01-01T00:00:00Z.
+        #[arg(long, value_parser = parse_rfc3339)]
+        modified_after: Option<std::time::SystemTime>,
+        /// RFC3339 timestamp, e.g. 2026-01-01T00:00:00Z.
+        #[arg(long, value_parser = parse_rfc3339)]
+        modified_before: Option<std::time::SystemTime>,
+        #[arg(long)]
+        max_depth: Option<usize>,
+        #[arg(long)]
+        follow_symlinks: bool,
+        #[command(flatten)]
+        batch: RemoveBatchArgs,
+        /// Inverts the builder's default of `true`: actually delete
+        /// matches instead of only previewing them.
+        #[arg(long)]
+        no_dry_run: bool,
+        /// Unlink matches permanently instead of moving them to the
+        /// platform trash/recycle bin.
+        #[arg(long)]
+        hard_delete: bool,
+        /// Required to proceed when no filter criterion above is set —
+        /// otherwise an unfiltered PATH (matching everything under it)
+        /// is refused before anything is touched.
+        #[arg(long)]
+        allow_unfiltered_delete: bool,
+    },
     /// Check whether a newer fsapp release is available.
     UpdateCheck,
     /// Print a shell completion script, or install it with --install.
@@ -162,4 +238,21 @@ pub struct FsSafetyArgs {
     pub preserve_permissions: bool,
     #[arg(long)]
     pub allow_fs_integrity_risk: bool,
+}
+
+/// Flattened into remove only. No `small_file_threshold` — removal has no
+/// small/large split (`RemoveBuilder`'s doc comment: every matched entry
+/// is treated as a batch unit) — and no `FsSafetyArgs`, since
+/// `preserve_permissions`/`allow_fs_integrity_risk` aren't methods on
+/// `RemoveBuilder`.
+#[derive(Args, Default)]
+pub struct RemoveBatchArgs {
+    #[arg(long)]
+    pub on_error: Option<OnError>,
+    #[arg(long)]
+    pub batch_concurrency: Option<u64>,
+}
+
+fn parse_rfc3339(s: &str) -> Result<std::time::SystemTime, String> {
+    humantime::parse_rfc3339(s).map_err(|e| e.to_string())
 }
